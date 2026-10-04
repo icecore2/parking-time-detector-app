@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Permissions for Alarms, Notifications, and Vibration -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Query ParkedIn and MyParking apps to open them directly -->
+    <queries>
+        <package android:name="com.preciseparklink.parkedin" />
+        <package android:name="com.cpa.accountManagement" />
+    </queries>
+
+    <application
+        android:name=".ParkingApp"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ParkingTimeDetector"
+        tools:targetApi="35">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ParkingTimeDetector">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Notification Listener Service to catch parking notifications -->
+        <service
+            android:name=".service.ParkingNotificationListenerService"
+            android:label="@string/notification_listener_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Accessibility Service to catch on-screen UI text when parking apps do not post notifications -->
+        <service
+            android:name=".service.ParkingAccessibilityService"
+            android:label="@string/accessibility_service_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+        <!-- Broadcast Receiver for Scheduled Alarms (Advance alert & Expiry) -->
+        <receiver
+            android:name=".receiver.ParkingAlarmReceiver"
+            android:exported="false" />
+
+        <!-- Broadcast Receiver for Device Reboot to restore alarms -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver for Parking Detection Approval Actions -->
+        <receiver
+            android:name=".receiver.PendingDetectionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.parktimedetector.action.APPROVE_DETECTION" />
+                <action android:name="com.parktimedetector.action.DISMISS_DETECTION" />
+                <action android:name="com.parktimedetector.action.APPROVE_STOP_DETECTION" />
+                <action android:name="com.parktimedetector.action.DISMISS_STOP_DETECTION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver for Local Testing & Emulator Simulation via ADB -->
+        <receiver
+            android:name=".receiver.SimulationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.parktimedetector.action.SIMULATE" />
+                <action android:name="com.parktimedetector.SIMULATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FileProvider for Sharing Diagnostic Log Archives -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+    </application>
+
+</manifest>

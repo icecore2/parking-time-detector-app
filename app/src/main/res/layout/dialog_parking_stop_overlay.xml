@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlay_stop_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <!-- Floating Bubble Mode (Collapsible / Expandable) -->
+    <FrameLayout
+        android:id="@+id/layout_overlay_stop_bubble"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_overlay_bubble_stop"
+        android:elevation="18dp"
+        android:visibility="gone">
+
+        <!-- Center App / Stop Icon -->
+        <ImageView
+            android:id="@+id/iv_overlay_stop_bubble_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_stop_circle"
+            android:tint="@color/rose_red" />
+
+        <!-- Notification Style Dot (Badge in Top Right Corner) -->
+        <View
+            android:id="@+id/view_overlay_stop_bubble_dot"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/bg_notification_dot_red" />
+    </FrameLayout>
+
+    <!-- Expanded Draggable Card Dialog -->
+    <LinearLayout
+        android:id="@+id/layout_overlay_stop_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:animateLayoutChanges="true"
+        android:background="@drawable/bg_overlay_dialog_stop"
+        android:elevation="16dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="visible">
+
+        <!-- Draggable Handle Bar Indicator -->
+        <View
+            android:id="@+id/view_overlay_stop_drag_handle"
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_drag_handle" />
+
+        <!-- Card Top Header Bar -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_stop_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- App / Type Chip Badge with Notification Dot Indicator -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_pill"
+                android:backgroundTint="@color/badge_bg_red"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp">
+
+                <!-- Notification Dot Style Indicator -->
+                <View
+                    android:id="@+id/iv_overlay_stop_header_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:layout_marginEnd="5dp"
+                    android:background="@drawable/bg_notification_dot_red" />
+
+                <ImageView
+                    android:id="@+id/iv_overlay_stop_badge_icon"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_stop_circle"
+                    android:tint="@color/rose_red" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_badge_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:text="SESSION STOPPED"
+                    android:textColor="@color/rose_red"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Minimize into Floating Bubble Button -->
+            <TextView
+                android:id="@+id/btn_overlay_stop_minimize"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:paddingHorizontal="6dp"
+                android:text="Bubble 💬"
+                android:textColor="@color/rose_red"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Expand / Collapse Indicator Button -->
+            <TextView
+                android:id="@+id/btn_overlay_stop_expand"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_marginStart="2dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:paddingHorizontal="6dp"
+                android:text="Details ▼"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Close / Dismiss Quick Icon Button -->
+            <TextView
+                android:id="@+id/btn_overlay_stop_close"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="✕"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Suggestion Banner: Suggests ending timer when stop detected -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_stop_suggestion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_suggestion_box_stop"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🛑 "
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Suggested: End Parking Timer"
+                    android:textColor="@color/rose_red"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_overlay_stop_suggestion_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Session stop detected. End active timer and record session summary?"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Main Content Area -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <!-- Primary Text: Location / Lot -->
+            <TextView
+                android:id="@+id/tv_overlay_stop_primary_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="MyParking • Parking Stopped"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <!-- Secondary Text: Stopped time, duration, cost -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_marginEnd="6dp"
+                    android:src="@drawable/ic_timer"
+                    android:tint="@color/rose_red" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_secondary_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Stopped at 5:15 PM • 45m"
+                    android:textColor="@color/rose_red"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Primary Quick Actions Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_overlay_stop_dismiss"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_button_secondary"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
+                android:text="Dismiss"
+                android:textAllCaps="false"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btn_overlay_stop_quick_accept"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1.4"
+                android:background="@drawable/bg_button_primary_red"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
+                android:text="End Timer"
+                android:textAllCaps="false"
+                android:textColor="@color/dark_navy"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- Hidden redundant button for compatibility -->
+            <Button
+                android:id="@+id/btn_overlay_stop_accept"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Expandable Detailed Section (Hidden by Default) -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_stop_details"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Detail Information Box -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_overlay_details_box"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_detail_location"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Location: Lot 58"
+                    android:textColor="@color/primary_blue"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_detail_time"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Stopped At: 5:15 PM"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_detail_duration"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Time Parked: 45 mins"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_detail_cost"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Total Cost / Refund: $2.50"
+                    android:textColor="@color/emerald_green"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_stop_detail_source"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Source: MyParking (Screen Detected Stop)"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

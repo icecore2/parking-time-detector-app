@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Stylized Financial Chart / Expense Tracker Icon -->
+    <!-- Represents growth and tracking -->
+
+    <!-- Main White Circle (Safe Zone: 21 to 87) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0" />
+
+    <!-- Bar Chart elements (representing logging/dashboard) -->
+    <!-- Vibrant Green color matching background -->
+    <path
+        android:fillColor="#8BC34A"
+        android:pathData="M38,62h6v10h-6z" />
+    <path
+        android:fillColor="#8BC34A"
+        android:pathData="M48,52h6v20h-6z" />
+    <path
+        android:fillColor="#8BC34A"
+        android:pathData="M58,58h6v14h-6z" />
+    <path
+        android:fillColor="#8BC34A"
+        android:pathData="M68,44h6v28h-6z" />
+
+    <!-- Trend line over the bars -->
+    <path
+        android:fillColor="#8BC34A"
+        android:pathData="M38,58l10,-10l10,6l10,-14l4,4l-14,20l-10,-6l-10,10z" />
+
+</vector>

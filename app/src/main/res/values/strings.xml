@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Parking Time Detector</string>
+    <string name="notification_listener_name">ParkedIn Session Detector</string>
+    <string name="channel_urgent_name">Parking Expiry Alerts</string>
+    <string name="channel_urgent_desc">Notifications sent before and at the moment parking expires</string>
+    <string name="channel_status_name">Active Parking Status</string>
+    <string name="channel_status_desc">Ongoing countdown notification for active parking session</string>
+    <string name="accessibility_service_name">Parking Screen Detector</string>
+    <string name="accessibility_service_desc">Inspects on-screen UI text when MyParking or ParkedIn is open to automatically detect active parking sessions and end times when notifications are unavailable.</string>
+</resources>

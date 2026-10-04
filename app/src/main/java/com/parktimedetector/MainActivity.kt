@@ -1,0 +1,312 @@
+package com.parktimedetector
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
+import com.parktimedetector.ui.screens.HistoryScreen
+import com.parktimedetector.ui.screens.HomeScreen
+import com.parktimedetector.ui.screens.LogsScreen
+import com.parktimedetector.ui.screens.SettingsScreen
+import com.parktimedetector.ui.theme.DarkNavy
+import com.parktimedetector.ui.theme.ParkingTimeDetectorTheme
+import com.parktimedetector.ui.theme.PrimaryBlue
+import com.parktimedetector.ui.theme.SurfaceDark
+import com.parktimedetector.ui.theme.TextMuted
+import com.parktimedetector.ui.theme.TextPrimary
+import com.parktimedetector.ui.viewmodel.ParkingViewModel
+
+enum class ScreenTab(val title: String) {
+    HOME("Timer"),
+    HISTORY("History"),
+    LOGS("Logs"),
+    SETTINGS("Settings")
+}
+
+class MainActivity : ComponentActivity() {
+
+    private val viewModel: ParkingViewModel by viewModels()
+
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        // Permission result handled
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Request POST_NOTIFICATIONS on Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        setContent {
+            ParkingTimeDetectorTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    MainAppContent(viewModel = viewModel)
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+}
+
+@Composable
+fun MainAppContent(viewModel: ParkingViewModel) {
+    var currentTab by remember { mutableStateOf(ScreenTab.HOME) }
+    var showSimulatorSheet by remember { mutableStateOf(false) }
+
+    val activeSession by viewModel.activeSession.collectAsState()
+    val sessionHistory by viewModel.sessionHistory.collectAsState()
+    val advanceWarningMinutes by viewModel.advanceWarningMinutes.collectAsState()
+    val logs by viewModel.logs.collectAsState()
+    val isServiceConnected by viewModel.isServiceConnected.collectAsState()
+    val isAccessibilityConnected by viewModel.isAccessibilityConnected.collectAsState()
+    val logAllNotifications by viewModel.logAllNotifications.collectAsState()
+    val showConfirmationDialogs by viewModel.showConfirmationDialogs.collectAsState()
+    val pendingDetection by viewModel.pendingDetection.collectAsState()
+    val pendingStopDetection by viewModel.pendingStopDetection.collectAsState()
+    val recentlyStoppedSession by viewModel.recentlyStoppedSession.collectAsState()
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val activity = context as? android.app.Activity
+
+    // When opened from notification or when pending detection exists in app,
+    // ensure user is on the HOME tab and dismiss floating overlay so there's no visual clutter.
+    androidx.compose.runtime.LaunchedEffect(activity?.intent, pendingDetection, pendingStopDetection) {
+        if (activity?.intent?.getBooleanExtra("EXTRA_SHOW_APPROVAL_DIALOG", false) == true ||
+            activity?.intent?.getBooleanExtra("EXTRA_SHOW_STOP_DIALOG", false) == true
+        ) {
+            currentTab = ScreenTab.HOME
+            com.parktimedetector.service.DetectionApprovalManager.overlayCallback?.hideOverlay()
+            activity.intent.removeExtra("EXTRA_SHOW_APPROVAL_DIALOG")
+            activity.intent.removeExtra("EXTRA_SHOW_STOP_DIALOG")
+        }
+    }
+
+    if (showSimulatorSheet) {
+        com.parktimedetector.ui.screens.SimulatorBottomSheet(
+            viewModel = viewModel,
+            onDismiss = { showSimulatorSheet = false }
+        )
+    }
+
+    Scaffold(
+        topBar = {
+            Surface(
+                color = SurfaceDark,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Timer,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ParkingTimeDetector",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+
+                    // Simulator Quick Launch Button
+                    Surface(
+                        color = PrimaryBlue.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { showSimulatorSheet = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.BugReport,
+                                contentDescription = "Open Simulator",
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Simulator",
+                                color = PrimaryBlue,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            NavigationBar(
+                containerColor = SurfaceDark
+            ) {
+                NavigationBarItem(
+                    selected = currentTab == ScreenTab.HOME,
+                    onClick = { currentTab = ScreenTab.HOME },
+                    icon = { Icon(Icons.Default.Timer, contentDescription = "Timer") },
+                    label = { Text("Timer") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.Black,
+                        selectedTextColor = PrimaryBlue,
+                        indicatorColor = PrimaryBlue,
+                        unselectedIconColor = TextMuted,
+                        unselectedTextColor = TextMuted
+                    )
+                )
+                NavigationBarItem(
+                    selected = currentTab == ScreenTab.HISTORY,
+                    onClick = { currentTab = ScreenTab.HISTORY },
+                    icon = { Icon(Icons.Default.History, contentDescription = "History") },
+                    label = { Text("History") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.Black,
+                        selectedTextColor = PrimaryBlue,
+                        indicatorColor = PrimaryBlue,
+                        unselectedIconColor = TextMuted,
+                        unselectedTextColor = TextMuted
+                    )
+                )
+                NavigationBarItem(
+                    selected = currentTab == ScreenTab.LOGS,
+                    onClick = { currentTab = ScreenTab.LOGS },
+                    icon = { Icon(Icons.Default.BugReport, contentDescription = "Logs") },
+                    label = { Text("Logs") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.Black,
+                        selectedTextColor = PrimaryBlue,
+                        indicatorColor = PrimaryBlue,
+                        unselectedIconColor = TextMuted,
+                        unselectedTextColor = TextMuted
+                    )
+                )
+                NavigationBarItem(
+                    selected = currentTab == ScreenTab.SETTINGS,
+                    onClick = { currentTab = ScreenTab.SETTINGS },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                    label = { Text("Settings") },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.Black,
+                        selectedTextColor = PrimaryBlue,
+                        indicatorColor = PrimaryBlue,
+                        unselectedIconColor = TextMuted,
+                        unselectedTextColor = TextMuted
+                    )
+                )
+            }
+        }
+    ) { innerPadding ->
+        when (currentTab) {
+            ScreenTab.HOME -> {
+                if (recentlyStoppedSession != null) {
+                    com.parktimedetector.ui.screens.SessionStopScreen(
+                        session = recentlyStoppedSession!!,
+                        onDone = { viewModel.clearRecentlyStoppedSession() },
+                        onViewHistory = {
+                            viewModel.clearRecentlyStoppedSession()
+                            currentTab = ScreenTab.HISTORY
+                        },
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                } else {
+                    HomeScreen(
+                        viewModel = viewModel,
+                        activeSession = activeSession,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+            }
+            ScreenTab.HISTORY -> HistoryScreen(
+                viewModel = viewModel,
+                sessions = sessionHistory,
+                modifier = Modifier.padding(innerPadding)
+            )
+            ScreenTab.LOGS -> LogsScreen(
+                viewModel = viewModel,
+                logs = logs,
+                isNotificationServiceConnected = isServiceConnected,
+                isAccessibilityConnected = isAccessibilityConnected,
+                logAllNotifications = logAllNotifications,
+                modifier = Modifier.padding(innerPadding)
+            )
+            ScreenTab.SETTINGS -> SettingsScreen(
+                viewModel = viewModel,
+                advanceWarningMinutes = advanceWarningMinutes,
+                modifier = Modifier.padding(innerPadding)
+            )
+        }
+    }
+}

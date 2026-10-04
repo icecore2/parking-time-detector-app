@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlay_detection_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <!-- Floating Bubble Mode (Collapsible / Expandable) -->
+    <FrameLayout
+        android:id="@+id/layout_overlay_bubble"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_overlay_bubble"
+        android:elevation="18dp"
+        android:visibility="gone">
+
+        <!-- Center App / Parking Icon -->
+        <ImageView
+            android:id="@+id/iv_overlay_bubble_icon"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_local_parking"
+            android:tint="@color/emerald_green" />
+
+        <!-- Notification Style Dot (Badge in Top Right Corner) -->
+        <View
+            android:id="@+id/view_overlay_bubble_dot"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="3dp"
+            android:layout_marginEnd="3dp"
+            android:background="@drawable/bg_notification_dot" />
+    </FrameLayout>
+
+    <!-- Expanded Draggable Card Dialog -->
+    <LinearLayout
+        android:id="@+id/layout_overlay_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:animateLayoutChanges="true"
+        android:background="@drawable/bg_overlay_dialog"
+        android:elevation="16dp"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:visibility="visible">
+
+        <!-- Draggable Handle Bar Indicator -->
+        <View
+            android:id="@+id/view_overlay_drag_handle"
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="8dp"
+            android:background="@drawable/bg_drag_handle" />
+
+        <!-- Card Top Header Bar -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <!-- App / Type Chip Badge with Notification Dot Indicator -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_badge_pill"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp">
+
+                <!-- Notification Dot Style Indicator -->
+                <View
+                    android:id="@+id/iv_overlay_header_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:layout_marginEnd="5dp"
+                    android:background="@drawable/bg_notification_dot" />
+
+                <ImageView
+                    android:id="@+id/iv_overlay_badge_icon"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:src="@drawable/ic_local_parking"
+                    android:tint="@color/emerald_green" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_badge_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="5dp"
+                    android:text="PARKING DETECTED"
+                    android:textColor="@color/emerald_green"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Minimize into Floating Bubble Button -->
+            <TextView
+                android:id="@+id/btn_overlay_minimize"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:paddingHorizontal="6dp"
+                android:text="Bubble 💬"
+                android:textColor="@color/accent_cyan"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Expand / Collapse Indicator Button -->
+            <TextView
+                android:id="@+id/btn_overlay_expand"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_marginStart="2dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:paddingHorizontal="6dp"
+                android:text="Details ▼"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- Close / Dismiss Quick Icon Button -->
+            <TextView
+                android:id="@+id/btn_overlay_close"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:gravity="center"
+                android:text="✕"
+                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Suggestion Banner: Suggests starting timer when session/start time detected -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_suggestion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_suggestion_box"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="⏱️ "
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Suggested: Start Parking Timer"
+                    android:textColor="@color/emerald_green"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_overlay_suggestion_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Session detected. Start timer now to track remaining time and receive renewal alerts?"
+                android:textColor="@color/text_primary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Main Content Area -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical">
+
+            <!-- Primary Text: Location / Lot -->
+            <TextView
+                android:id="@+id/tv_overlay_primary_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="MyParking • Lot 58"
+                android:textColor="@color/text_primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <!-- Secondary Text: Expiry Time & Duration -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
+                    android:layout_marginEnd="6dp"
+                    android:src="@drawable/ic_timer"
+                    android:tint="@color/accent_cyan" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_secondary_text"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Ends 6:00 AM (13h 50m)"
+                    android:textColor="@color/accent_cyan"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Primary Quick Actions Row (Visible in Compact & Expanded state) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_overlay_dismiss"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_button_secondary"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
+                android:text="Dismiss"
+                android:textAllCaps="false"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btn_overlay_quick_start"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1.4"
+                android:background="@drawable/bg_button_primary_green"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:minHeight="0dp"
+                android:text="Start Timer"
+                android:textAllCaps="false"
+                android:textColor="@color/dark_navy"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- Hidden redundant button for compatibility -->
+            <Button
+                android:id="@+id/btn_overlay_start"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- Expandable Detailed Section (Hidden by Default) -->
+        <LinearLayout
+            android:id="@+id/layout_overlay_details"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Detail Information Box -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_overlay_details_box"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/tv_overlay_detail_location"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Location: Lot 58 - 935 - 4 Av SW"
+                    android:textColor="@color/primary_blue"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_detail_expiry"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="5dp"
+                    android:text="Expires: Sunday, September 27 - 06:00 AM"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_detail_duration"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Duration: 13 hrs. 50 mins."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tv_overlay_detail_source"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Source: MyParking (Screen Detected)"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>
