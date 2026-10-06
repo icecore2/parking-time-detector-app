@@ -99,6 +99,9 @@ dependencies {
     // Material
     implementation(libs.material)
 
+    // Networking
+    implementation(libs.okhttp)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -168,4 +168,13 @@ object ZoneDiscoveryManager {
             null
         }
     }
+
+    /**
+     * Enriches zone discovery by fetching live MyParking rate information and max duration.
+     */
+    suspend fun fetchLiveZoneDetails(zoneOrLot: String): com.parktimedetector.network.ParkingZoneDetails {
+        val cleanDigits = zoneOrLot.filter { it.isDigit() }
+        val zoneNumber = if (cleanDigits.isNotEmpty()) cleanDigits else zoneOrLot
+        return com.parktimedetector.network.MyParkingApiClient.getCombinedZoneDetails(zoneNumber, fallbackTitle = zoneOrLot)
+    }
 }

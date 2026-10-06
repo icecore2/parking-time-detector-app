@@ -2,11 +2,14 @@ package com.parktimedetector.mock
 
 import android.os.Bundle
 import android.widget.Toast
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,16 +23,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,9 +48,11 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,12 +62,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.parktimedetector.network.CostDuration
+import com.parktimedetector.network.MyParkingApiClient
+import com.parktimedetector.network.ParkingMapPin
+import com.parktimedetector.network.ParkingZoneDetails
 import com.parktimedetector.ui.theme.DarkNavy
 import com.parktimedetector.ui.theme.EmeraldGreen
 import com.parktimedetector.ui.theme.PrimaryBlue
 import com.parktimedetector.ui.theme.SurfaceDark
 import com.parktimedetector.ui.theme.TextPrimary
 import com.parktimedetector.ui.theme.TextSecondary
+import kotlinx.coroutines.launch
 
 enum class MockMyParkingScreen {
     MAP_SEARCH,
@@ -87,6 +104,51 @@ fun MockMyParkingApp(
     var screenState by remember { mutableStateOf(MockMyParkingScreen.MAP_SEARCH) }
     var searchQuery by remember { mutableStateOf("") }
     var selectedLot by remember { mutableStateOf("Lot 58 - 935 - 4 Av SW") }
+    var selectedZoneNumber by remember { mutableStateOf("9058") }
+    var selectedDurationMinutes by remember { mutableStateOf(120) }
+    var selectedRateText by remember { mutableStateOf("Rate: $3.00 / hr") }
+
+    // Live fetched zone details
+    var activeZoneDetails by remember { mutableStateOf<ParkingZoneDetails?>(null) }
+    var isLoadingDetails by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+
+    // Map pins representing Calgary Parking Authority locations
+    val mapPins = remember {
+        listOf(
+            ParkingMapPin("9058", "Lot 58", "Downtown West", 51.0492, -114.0834, isLot = true),
+            ParkingMapPin("1008", "Zone 1008", "Eau Claire Ave", 51.0520, -114.0720),
+            ParkingMapPin("1205", "Zone 1205", "Kensington", 51.0532, -114.0865),
+            ParkingMapPin("4022", "Zone 4022", "Downtown 8th Ave", 51.0486, -114.0708),
+            ParkingMapPin("9025", "Lot 25", "City Hall P1", 51.0458, -114.0570, isLot = true)
+        )
+    }
+
+    // Function to trigger live network fetch when a pin is pressed
+    fun onPinPressed(pin: ParkingMapPin) {
+        selectedZoneNumber = pin.zoneNumber
+        selectedLot = "${pin.title} - ${pin.subtitle}"
+        isLoadingDetails = true
+
+        scope.launch {
+            val details = MyParkingApiClient.getCombinedZoneDetails(
+                zoneNumber = pin.zoneNumber,
+                fallbackTitle = pin.title,
+                fallbackAddress = "${pin.title} - ${pin.subtitle}"
+            )
+            activeZoneDetails = details
+            selectedLot = details.address
+            selectedRateText = details.hourlyRateEstimate ?: "Rate: $3.00 / hr"
+            selectedDurationMinutes = details.maxTimeMinutes ?: 120
+            isLoadingDetails = false
+        }
+    }
+
+    // Auto-fetch default pin on initial launch
+    LaunchedEffect(Unit) {
+        onPinPressed(mapPins.first())
+    }
 
     val sampleLots = listOf(
         "Lot 58 - 935 - 4 Av SW" to "9058",
@@ -143,19 +205,192 @@ fun MockMyParkingApp(
 
             when (screenState) {
                 MockMyParkingScreen.MAP_SEARCH -> {
-                    // Map Placeholder
+                    // Interactive Map Pin Bar & Status Canvas
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp)
-                            .background(Color(0xFF1E293B), RoundedCornerShape(12.dp)),
-                        contentAlignment = Alignment.Center
+                            .background(Color(0xFF1E293B), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
                     ) {
-                        Text(
-                            text = "🗺️ Map View Placeholder\n(Pin 9058 Active in Area)",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "🗺️ Interactive Map (Press Pin to Fetch)",
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                if (isLoadingDetails) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = EmeraldGreen
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Scrollable row of interactive Map Pins
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                mapPins.forEach { pin ->
+                                    val isSelected = selectedZoneNumber == pin.zoneNumber
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = if (isSelected) EmeraldGreen else Color(0xFF2C394B),
+                                        modifier = Modifier
+                                            .semantics {
+                                                contentDescription = "Map Pin ${pin.zoneNumber} ${pin.title}"
+                                            }
+                                            .clickable { onPinPressed(pin) }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Place,
+                                                contentDescription = null,
+                                                tint = if (isSelected) DarkNavy else PrimaryBlue,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "${pin.title} (${pin.zoneNumber})",
+                                                color = if (isSelected) DarkNavy else Color.White,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Dynamic Live Parking Details Card for the clicked pin
+                            activeZoneDetails?.let { details ->
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFF131B2A), RoundedCornerShape(8.dp))
+                                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
+                                        .padding(10.dp)
+                                ) {
+                                    Column {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "📍 ${details.nameOrTitle}",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = if (details.isFallback) "🟠 Offline Cache" else "🟢 CPA Live API",
+                                                color = if (details.isFallback) Color(0xFFFFA726) else EmeraldGreen,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+
+                                        Text(
+                                            text = details.address,
+                                            color = TextSecondary,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(
+                                                text = "Rate: ${details.hourlyRateEstimate ?: "N/A"}",
+                                                color = EmeraldGreen,
+                                                fontWeight = FontWeight.Medium,
+                                                fontSize = 12.sp
+                                            )
+                                            Text(
+                                                text = "Max Stay: ${details.maxTimeMinutes ?: 120}m",
+                                                color = Color.LightGray,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+
+                                        // Cost and Duration options from live VPM response
+                                        if (details.costDurations.isNotEmpty()) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = "Select Duration:",
+                                                color = TextSecondary,
+                                                fontSize = 10.sp
+                                            )
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .horizontalScroll(rememberScrollState())
+                                                    .padding(vertical = 4.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                details.costDurations.take(5).forEach { opt ->
+                                                    val isOptSelected = selectedDurationMinutes == opt.durationMinutes
+                                                    Surface(
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        color = if (isOptSelected) PrimaryBlue else Color(0xFF1E293B),
+                                                        modifier = Modifier.clickable {
+                                                            selectedDurationMinutes = opt.durationMinutes
+                                                            selectedRateText = String.format(Locale.US, "$%.2f for %d mins", opt.cost, opt.durationMinutes)
+                                                        }
+                                                    ) {
+                                                        Text(
+                                                            text = "${opt.durationMinutes}m • $${String.format(Locale.US, "%.2f", opt.cost)}",
+                                                            color = Color.White,
+                                                            fontSize = 11.sp,
+                                                            fontWeight = if (isOptSelected) FontWeight.Bold else FontWeight.Normal,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Button(
+                                            onClick = {
+                                                selectedLot = details.address
+                                                screenState = MockMyParkingScreen.START_SESSION
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
+                                            shape = RoundedCornerShape(6.dp),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(36.dp)
+                                        ) {
+                                            Text(
+                                                text = "Select Pin & Park Here",
+                                                color = DarkNavy,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -172,6 +407,22 @@ fun MockMyParkingApp(
                         label = { Text("Search zone number or lot (e.g. 9058)") },
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = "Search Icon")
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotBlank()) {
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        isLoadingDetails = true
+                                        val details = MyParkingApiClient.getCombinedZoneDetails(searchQuery.trim())
+                                        activeZoneDetails = details
+                                        selectedLot = details.address
+                                        selectedZoneNumber = details.zoneNumber
+                                        isLoadingDetails = false
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Refresh, contentDescription = "Fetch Zone Data", tint = PrimaryBlue)
+                                }
+                            }
                         },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -203,8 +454,17 @@ fun MockMyParkingApp(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable {
+                                        selectedZoneNumber = zoneNum
                                         selectedLot = "$lotName (Zone $zoneNum)"
-                                        screenState = MockMyParkingScreen.START_SESSION
+                                        onPinPressed(
+                                            ParkingMapPin(
+                                                zoneNumber = zoneNum,
+                                                title = lotName,
+                                                subtitle = "Zone $zoneNum",
+                                                latitude = 51.0486,
+                                                longitude = -114.0708
+                                            )
+                                        )
                                     }
                             ) {
                                 Row(
@@ -223,7 +483,7 @@ fun MockMyParkingApp(
                                             fontSize = 14.sp
                                         )
                                         Text(
-                                            text = "Zone $zoneNum • Hourly Rate $3.00",
+                                            text = "Zone $zoneNum • Tap to fetch live CPA rates",
                                             color = TextSecondary,
                                             fontSize = 12.sp
                                         )
@@ -254,8 +514,24 @@ fun MockMyParkingApp(
                             )
 
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text(text = "Rate: $3.00 / hr", color = EmeraldGreen, fontWeight = FontWeight.Medium)
-                            Text(text = "Duration: 2 hrs (Expires in 120 mins)", color = Color.White)
+                            Text(
+                                text = selectedRateText,
+                                color = EmeraldGreen,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Duration: ${selectedDurationMinutes / 60}h ${selectedDurationMinutes % 60}m (Expires in $selectedDurationMinutes mins)",
+                                color = Color.White
+                            )
+
+                            activeZoneDetails?.enforceableTime?.let { hours ->
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Enforcement Hours: $hours",
+                                    color = TextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(20.dp))
 
