@@ -24,7 +24,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
@@ -33,6 +35,9 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocalParking
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -164,8 +169,38 @@ fun HistoryScreen(
     sessions: List<ParkingSession>,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showClearDialog by remember { mutableStateOf(false) }
-    val groupedSessions = remember(sessions) { groupParkingSessions(sessions) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilterSource by remember { mutableStateOf("ALL") }
+
+    val analytics = remember(sessions) {
+        com.parktimedetector.analytics.ParkingCsvExporter.calculateAnalytics(sessions)
+    }
+
+    // Filter sessions based on search text and source chips
+    val filteredSessions = remember(sessions, searchQuery, selectedFilterSource) {
+        sessions.filter { s ->
+            val matchesSource = when (selectedFilterSource) {
+                "PARKEDIN" -> s.packageName == com.parktimedetector.notification.NotificationHelper.PARKEDIN_PACKAGE || s.source.contains("ParkedIn", ignoreCase = true)
+                "MYPARKING" -> s.packageName == com.parktimedetector.notification.NotificationHelper.MYPARKING_PACKAGE || s.source.contains("MyParking", ignoreCase = true)
+                "MANUAL" -> s.packageName.contains("manual", ignoreCase = true) || s.source.contains("Timer", ignoreCase = true)
+                else -> true
+            }
+
+            val query = searchQuery.trim().lowercase()
+            val matchesQuery = query.isEmpty() ||
+                (s.zoneOrLot?.lowercase()?.contains(query) == true) ||
+                (s.locationAddress?.lowercase()?.contains(query) == true) ||
+                (s.spotDetails?.lowercase()?.contains(query) == true) ||
+                (s.notesText?.lowercase()?.contains(query) == true) ||
+                (s.source.lowercase().contains(query))
+
+            matchesSource && matchesQuery
+        }
+    }
+
+    val groupedSessions = remember(filteredSessions) { groupParkingSessions(filteredSessions) }
 
     if (showClearDialog) {
         AlertDialog(
@@ -188,7 +223,7 @@ fun HistoryScreen(
                     Text("Cancel")
                 }
             },
-            containerColor = SurfaceDark
+            containerColor = MaterialTheme.colorScheme.surface
         )
     }
 
@@ -197,38 +232,188 @@ fun HistoryScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Top Header
+        // Top Header with Export CSV & Clear Actions
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Parking History",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${groupedSessions.size} grouped sessions (${sessions.size} total events)",
+                    text = "${groupedSessions.size} grouped sessions (${sessions.size} total records)",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (sessions.isNotEmpty()) {
-                IconButton(onClick = { showClearDialog = true }) {
-                    Icon(
-                        Icons.Default.DeleteSweep,
-                        contentDescription = "Clear History",
-                        tint = RoseRed
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (sessions.isNotEmpty()) {
+                    androidx.compose.material3.FilledTonalButton(
+                        onClick = { viewModel.exportParkingExpensesCsv(context) },
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Export CSV", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    IconButton(onClick = { showClearDialog = true }) {
+                        Icon(
+                            Icons.Default.DeleteSweep,
+                            contentDescription = "Clear History",
+                            tint = RoseRed
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Analytics Summary Card
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "📊 Expense & Usage Analytics",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("This Month Spend", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = String.format(Locale.US, "$%.2f", analytics.thisMonthCost),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldGreen
+                        )
+                        Text(
+                            text = "${analytics.thisMonthSessions} sessions",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Total Parked", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val totalHrs = analytics.totalDurationMinutes / 60
+                        val totalMins = analytics.totalDurationMinutes % 60
+                        Text(
+                            text = if (totalHrs > 0) "${totalHrs}h ${totalMins}m" else "${totalMins}m",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "${analytics.totalSessions} sessions",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("All-Time Spend", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = String.format(Locale.US, "$%.2f", analytics.totalCost),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Tracked",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Search Bar & Filter Chips Row
+        androidx.compose.material3.OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search by zone, address, spot, notes...") },
+            leadingIcon = {
+                Icon(
+                    androidx.compose.material.icons.Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(
+                            androidx.compose.material.icons.Icons.Default.Close,
+                            contentDescription = "Clear",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Filter chips: All, ParkedIn, MyParking, Manual
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val chips = listOf("ALL" to "All", "PARKEDIN" to "ParkedIn", "MYPARKING" to "MyParking", "MANUAL" to "Manual Timer")
+            chips.forEach { (key, label) ->
+                val isSelected = selectedFilterSource == key
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { selectedFilterSource = key }
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (groupedSessions.isEmpty()) {
             Box(
@@ -241,20 +426,23 @@ fun HistoryScreen(
                     Icon(
                         Icons.Default.History,
                         contentDescription = null,
-                        tint = TextMuted,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(64.dp)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "No Parking History Yet",
+                        text = if (searchQuery.isNotEmpty() || selectedFilterSource != "ALL") "No Matching Records" else "No Parking History Yet",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Sessions detected from MyParking or ParkedIn will automatically appear here with full start and stop details.",
+                        text = if (searchQuery.isNotEmpty() || selectedFilterSource != "ALL")
+                            "Try clearing your search query or switching source filters."
+                        else
+                            "Sessions detected from MyParking or ParkedIn will automatically appear here with full start and stop details.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -265,7 +453,17 @@ fun HistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(groupedSessions, key = { it.groupKey }) { group ->
-                    GroupedHistoryItemCard(group = group)
+                    GroupedHistoryItemCard(
+                        group = group,
+                        onAddToFavorites = { zoneName ->
+                            viewModel.addFavoriteZone(
+                                name = zoneName,
+                                durationMinutes = 60,
+                                notes = group.locationAddress
+                            )
+                            android.widget.Toast.makeText(context, "Added $zoneName to favorites!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
             }
         }
@@ -275,6 +473,7 @@ fun HistoryScreen(
 @Composable
 fun GroupedHistoryItemCard(
     group: GroupedParkingSession,
+    onAddToFavorites: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Collapsible state - collapsed as default
@@ -319,7 +518,7 @@ fun GroupedHistoryItemCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
@@ -330,7 +529,7 @@ fun GroupedHistoryItemCard(
                 .padding(16.dp)
                 .animateContentSize()
         ) {
-            // Header Row: Icon, Zone/Title, App Source, Status Pill, and Expand/Collapse Chevron
+            // Header Row: Icon, Zone/Title, App Source, Status Pill, Favorite action, and Chevron
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -344,13 +543,13 @@ fun GroupedHistoryItemCard(
                         modifier = Modifier
                             .size(38.dp)
                             .clip(CircleShape)
-                            .background(SurfaceDark),
+                            .background(MaterialTheme.colorScheme.surface),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             Icons.Default.LocalParking,
                             contentDescription = null,
-                            tint = PrimaryBlue,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -359,19 +558,19 @@ fun GroupedHistoryItemCard(
                         Text(
                             text = group.zoneOrLot ?: "Parking Session",
                             style = MaterialTheme.typography.titleMedium,
-                            color = TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Bold
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = group.primarySession.source,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PrimaryBlue
+                                color = MaterialTheme.colorScheme.primary
                             )
                             if (group.relatedSessions.isNotEmpty()) {
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
-                                    color = PrimaryBlue.copy(alpha = 0.2f),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                                     shape = RoundedCornerShape(4.dp)
                                 ) {
                                     Row(
@@ -381,14 +580,14 @@ fun GroupedHistoryItemCard(
                                         Icon(
                                             Icons.Default.Link,
                                             contentDescription = null,
-                                            tint = PrimaryBlue,
+                                            tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(10.dp)
                                         )
                                         Spacer(modifier = Modifier.width(2.dp))
                                         Text(
                                             text = "Merged (${group.allSessions.size})",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = PrimaryBlue,
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 9.sp
                                         )
                                     }
@@ -412,7 +611,21 @@ fun GroupedHistoryItemCard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    if (!group.zoneOrLot.isNullOrBlank()) {
+                        IconButton(
+                            onClick = { onAddToFavorites(group.zoneOrLot) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.StarBorder,
+                                contentDescription = "Add to Favorites",
+                                tint = AmberWarning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     IconButton(
                         onClick = { isExpanded = !isExpanded },
@@ -421,7 +634,7 @@ fun GroupedHistoryItemCard(
                         Icon(
                             imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = if (isExpanded) "Collapse details" else "Expand details",
-                            tint = TextSecondary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -438,13 +651,13 @@ fun GroupedHistoryItemCard(
                 Text(
                     text = "$startDate • $startTime",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = if (group.isStopped) "Parked: $actualDurationText" else actualDurationText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Medium
                     )
                     val displayCost = group.costOrRefund ?: group.initialCost
@@ -494,7 +707,7 @@ fun GroupedHistoryItemCard(
                     if (!group.locationAddress.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(10.dp))
                         Surface(
-                            color = SurfaceDark.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
@@ -512,7 +725,7 @@ fun GroupedHistoryItemCard(
                                 Text(
                                     text = group.locationAddress,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -523,7 +736,7 @@ fun GroupedHistoryItemCard(
 
                     // Start & End Lifecycle Sections
                     Surface(
-                        color = SurfaceDark.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -553,12 +766,12 @@ fun GroupedHistoryItemCard(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column {
-                                    Text("Started", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                    Text("$startDate, $startTime", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                    Text("Started", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("$startDate, $startTime", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text("Scheduled Expiry", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                    Text(scheduledEndTime, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                    Text("Scheduled Expiry", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(scheduledEndTime, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
 
@@ -568,13 +781,13 @@ fun GroupedHistoryItemCard(
                             ) {
                                 if (!group.purchasedDuration.isNullOrBlank()) {
                                     Column {
-                                        Text("Purchased Duration", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                        Text(group.purchasedDuration, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+                                        Text("Purchased Duration", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(group.purchasedDuration, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                                 if (!group.initialCost.isNullOrBlank()) {
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text("Initial Cost / Rate", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                        Text("Initial Cost / Rate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Text(group.initialCost, style = MaterialTheme.typography.bodySmall, color = EmeraldGreen, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
@@ -584,7 +797,7 @@ fun GroupedHistoryItemCard(
                             if (group.isStopped || stopTime != null) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(vertical = 4.dp),
-                                    color = CardBackground
+                                    color = MaterialTheme.colorScheme.outlineVariant
                                 )
 
                                 Row(
@@ -611,12 +824,12 @@ fun GroupedHistoryItemCard(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Column {
-                                        Text("Stopped At", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                        Text(stopTime ?: "Manual Deactivation", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                        Text("Stopped At", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(stopTime ?: "Manual Deactivation", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
-                                        Text("Actual Parked Time", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                        Text(actualDurationText, style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+                                        Text("Actual Parked Time", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(actualDurationText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                                     }
                                 }
 
@@ -626,13 +839,13 @@ fun GroupedHistoryItemCard(
                                 ) {
                                     if (!group.stopReason.isNullOrBlank()) {
                                         Column {
-                                            Text("Reason", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                                            Text(group.stopReason, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                            Text("Reason", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text(group.stopReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                                         }
                                     }
                                     if (!group.costOrRefund.isNullOrBlank()) {
                                         Column(horizontalAlignment = Alignment.End) {
-                                            Text("Cost / Refund", style = MaterialTheme.typography.labelSmall, color = TextMuted)
+                                            Text("Cost / Refund", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text(group.costOrRefund, style = MaterialTheme.typography.bodySmall, color = EmeraldGreen, fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -648,7 +861,7 @@ fun GroupedHistoryItemCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(SurfaceDark.copy(alpha = 0.5f))
+                                .background(MaterialTheme.colorScheme.surface)
                                 .padding(8.dp),
                             verticalAlignment = Alignment.Top
                         ) {
@@ -664,7 +877,7 @@ fun GroupedHistoryItemCard(
                             Text(
                                 text = group.notes,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 11.sp
                             )
                         }

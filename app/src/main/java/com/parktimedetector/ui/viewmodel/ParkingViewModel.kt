@@ -118,7 +118,58 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     val hapticFeedbackEnabled: StateFlow<Boolean> = prefsRepo.hapticFeedbackEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val themeMode: StateFlow<com.parktimedetector.data.AppThemeMode> = prefsRepo.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.data.AppThemeMode.SYSTEM)
+
+    val walkingBufferMinutes: StateFlow<Int> = prefsRepo.walkingBufferMinutes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DEFAULT_WALKING_BUFFER_MINUTES)
+
+    val favoriteZones: StateFlow<List<com.parktimedetector.data.FavoriteZone>> = prefsRepo.favoriteZones
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.data.FavoriteZone.defaultFavorites())
+
     val isAlarmPlaying: StateFlow<Boolean> = com.parktimedetector.audio.AlarmSoundManager.isPlaying
+
+    fun setThemeMode(mode: com.parktimedetector.data.AppThemeMode) {
+        viewModelScope.launch {
+            prefsRepo.setThemeMode(mode)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Theme mode set to: ${mode.name}")
+        }
+    }
+
+    fun setWalkingBufferMinutes(minutes: Int) {
+        viewModelScope.launch {
+            prefsRepo.setWalkingBufferMinutes(minutes)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Walking buffer set to: ${minutes}m")
+            val current = dao.getActiveSession()
+            if (current != null && current.isActive) {
+                val updated = current.copy(walkingBufferMinutes = minutes, isNotifiedWalkBuffer = false)
+                dao.update(updated)
+                ParkingAlarmScheduler.scheduleAlarms(getApplication(), updated)
+            }
+        }
+    }
+
+    fun addFavoriteZone(name: String, durationMinutes: Int = 60, notes: String? = null, lat: Double? = null, lng: Double? = null) {
+        viewModelScope.launch {
+            val newZone = com.parktimedetector.data.FavoriteZone(
+                id = "fav_${System.currentTimeMillis()}",
+                name = name,
+                defaultDurationMinutes = durationMinutes,
+                notes = notes,
+                latitude = lat,
+                longitude = lng
+            )
+            prefsRepo.addFavoriteZone(newZone)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Added favorite zone: $name")
+        }
+    }
+
+    fun removeFavoriteZone(id: String) {
+        viewModelScope.launch {
+            prefsRepo.removeFavoriteZone(id)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Removed favorite zone ID: $id")
+        }
+    }
 
     fun toggleAlwaysDetect(enabled: Boolean) {
         viewModelScope.launch {
@@ -445,11 +496,18 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         )
     }
 
-    fun startManualSession(durationMinutes: Int, zoneOrLot: String?) {
+    fun startManualSession(
+        durationMinutes: Int,
+        zoneOrLot: String?,
+        spotDetails: String? = null,
+        parkedLat: Double? = null,
+        parkedLng: Double? = null
+    ) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val endTime = now + (durationMinutes * 60 * 1000L)
             val advance = advanceWarningMinutes.first()
+            val walkBuffer = walkingBufferMinutes.first()
 
             val current = dao.getActiveSession()
             if (current != null) {
@@ -464,11 +522,25 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
                 startTimeMillis = now,
                 endTimeMillis = endTime,
                 advanceWarningMinutes = advance,
+                walkingBufferMinutes = walkBuffer,
+                spotDetails = spotDetails?.takeIf { it.isNotBlank() },
+                parkedLatitude = parkedLat,
+                parkedLongitude = parkedLng,
                 isActive = true
             )
 
             val id = dao.insert(newSession)
             val savedSession = newSession.copy(id = id)
+
+            if (parkedLat != null && parkedLng != null && !zoneOrLot.isNullOrBlank()) {
+                com.parktimedetector.location.ZoneDiscoveryManager.registerDiscoveredZone(
+                    zoneOrLot = zoneOrLot,
+                    address = null,
+                    lat = parkedLat,
+                    lng = parkedLng,
+                    durationMinutes = durationMinutes
+                )
+            }
 
             ParkingAlarmScheduler.scheduleAlarms(getApplication(), savedSession)
             NotificationHelper.showActiveCountdownNotification(getApplication(), savedSession)
@@ -481,13 +553,90 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             val newEndTime = current.endTimeMillis + (extraMinutes * 60 * 1000L)
             val updated = current.copy(
                 endTimeMillis = newEndTime,
-                isNotifiedAdvance = false, // reset advance warning if extended beyond it
+                isNotifiedAdvance = false,
+                isNotifiedWalkBuffer = false,
+                isNotifiedCritical = false,
                 isNotifiedExpiry = false
             )
             dao.update(updated)
 
             ParkingAlarmScheduler.scheduleAlarms(getApplication(), updated)
             NotificationHelper.showActiveCountdownNotification(getApplication(), updated)
+            NotificationHelper.cancelCriticalWarningNotification(getApplication())
+            NotificationHelper.cancelAdvanceWarningNotification(getApplication())
+            NotificationHelper.cancelWalkBufferNotification(getApplication())
+        }
+    }
+
+    fun extendCurrentSessionToTargetTime(targetEndTimeMillis: Long) {
+        viewModelScope.launch {
+            val current = dao.getActiveSession() ?: return@launch
+            if (targetEndTimeMillis <= System.currentTimeMillis()) return@launch
+            val updated = current.copy(
+                endTimeMillis = targetEndTimeMillis,
+                isNotifiedAdvance = false,
+                isNotifiedWalkBuffer = false,
+                isNotifiedCritical = false,
+                isNotifiedExpiry = false
+            )
+            dao.update(updated)
+
+            ParkingAlarmScheduler.scheduleAlarms(getApplication(), updated)
+            NotificationHelper.showActiveCountdownNotification(getApplication(), updated)
+            NotificationHelper.cancelCriticalWarningNotification(getApplication())
+            NotificationHelper.cancelAdvanceWarningNotification(getApplication())
+            NotificationHelper.cancelWalkBufferNotification(getApplication())
+        }
+    }
+
+    fun updateActiveSessionSpotDetails(spot: String) {
+        viewModelScope.launch {
+            val current = dao.getActiveSession() ?: return@launch
+            dao.updateSpotDetails(current.id, spot)
+            val updated = current.copy(spotDetails = spot)
+            NotificationHelper.showActiveCountdownNotification(getApplication(), updated)
+        }
+    }
+
+    fun updateActiveSessionLocation(lat: Double, lng: Double) {
+        viewModelScope.launch {
+            val current = dao.getActiveSession() ?: return@launch
+            dao.updateParkedCoordinates(current.id, lat, lng)
+            if (!current.zoneOrLot.isNullOrBlank()) {
+                com.parktimedetector.location.ZoneDiscoveryManager.registerDiscoveredZone(
+                    zoneOrLot = current.zoneOrLot,
+                    address = current.locationAddress,
+                    lat = lat,
+                    lng = lng
+                )
+            }
+        }
+    }
+
+    fun autoDetectNearbyZone(context: Context, onResult: (com.parktimedetector.location.DiscoveredZoneResult?) -> Unit) {
+        val location = com.parktimedetector.location.LocationHelper.getLastKnownLocation(context)
+        if (location == null) {
+            onResult(null)
+            return
+        }
+        viewModelScope.launch {
+            val pastSessions = dao.getSessionsWithCoordinates()
+            val favorites = favoriteZones.value
+            val result = com.parktimedetector.location.ZoneDiscoveryManager.findNearestZone(
+                currentLat = location.latitude,
+                currentLng = location.longitude,
+                maxRadiusMeters = 350.0,
+                pastSessions = pastSessions,
+                favoriteZones = favorites
+            )
+            onResult(result)
+        }
+    }
+
+    fun exportParkingExpensesCsv(context: Context) {
+        viewModelScope.launch {
+            val sessions = sessionHistory.value
+            com.parktimedetector.analytics.ParkingCsvExporter.exportAndShareCsv(context, sessions)
         }
     }
 

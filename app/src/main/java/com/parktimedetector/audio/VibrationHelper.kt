@@ -95,4 +95,32 @@ object VibrationHelper {
             // Ignore haptic feedback failure
         }
     }
+
+    fun performTickHaptic(context: Context) {
+        val vibrator = getVibrator(context) ?: return
+        if (!vibrator.hasVibrator()) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(10, 50))
+            }
+        } catch (_: Exception) {
+            // Ignore haptic failure
+        }
+    }
+
+    fun performWarningTransitionHaptic(context: Context) {
+        val vibrator = getVibrator(context) ?: return
+        if (!vibrator.hasVibrator()) return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 40, 50, 40), -1))
+            }
+        } catch (_: Exception) {
+            // Ignore haptic failure
+        }
+    }
 }

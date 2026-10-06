@@ -25,7 +25,12 @@ data class ParkingSession(
     val initialCostText: String? = null, // e.g. "$.00"
     val remainingTimeText: String? = null, // e.g. "19 mins : 57 secs"
     val notesText: String? = null,
-    val stopReason: String? = null
+    val stopReason: String? = null,
+    val spotDetails: String? = null, // e.g. "Level 2B, Spot #42"
+    val parkedLatitude: Double? = null,
+    val parkedLongitude: Double? = null,
+    val walkingBufferMinutes: Int = 0,
+    val isNotifiedWalkBuffer: Boolean = false
 ) {
     val displayLocation: String
         get() = when {
@@ -55,6 +60,12 @@ data class ParkingSession(
     fun isInAdvanceWarningZone(now: Long = System.currentTimeMillis()): Boolean {
         val warningThreshold = endTimeMillis - (advanceWarningMinutes * 60 * 1000L)
         return now >= warningThreshold && !isExpired(now)
+    }
+
+    fun isInWalkingBufferZone(now: Long = System.currentTimeMillis()): Boolean {
+        if (walkingBufferMinutes <= 0) return false
+        val walkThreshold = endTimeMillis - (walkingBufferMinutes * 60 * 1000L)
+        return now >= walkThreshold && !isExpired(now)
     }
 
     fun isInCriticalZone(now: Long = System.currentTimeMillis(), criticalMinutes: Int = 2): Boolean {

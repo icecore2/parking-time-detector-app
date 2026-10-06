@@ -40,9 +40,18 @@ enum class OverlayDialogPosition(val title: String, val description: String) {
     )
 }
 
+enum class AppThemeMode(val title: String) {
+    SYSTEM("Follow System"),
+    LIGHT("Light Mode"),
+    DARK("Dark Mode")
+}
+
 class UserPreferencesRepository(private val context: Context) {
 
     companion object {
+        val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        val KEY_WALKING_BUFFER_MINUTES = intPreferencesKey("walking_buffer_minutes")
+        val KEY_FAVORITE_ZONES = stringPreferencesKey("favorite_zones_json")
         val KEY_ADVANCE_WARNING_MINUTES = intPreferencesKey("advance_warning_minutes")
         val KEY_SOUND_ALERTS = booleanPreferencesKey("sound_alerts")
         val KEY_VIBRATION_ALERTS = booleanPreferencesKey("vibration_alerts")
@@ -70,6 +79,7 @@ class UserPreferencesRepository(private val context: Context) {
         const val DEFAULT_ADVANCE_MINUTES = 15
         const val DEFAULT_CRITICAL_MINUTES = 2
         const val DEFAULT_ESCALATION_SECONDS = 20
+        const val DEFAULT_WALKING_BUFFER_MINUTES = 5
         const val DEFAULT_PARKEDIN_PACKAGE = "com.preciseparklink.parkedin"
         const val DEFAULT_MYPARKING_PACKAGE = "com.cpa.accountManagement"
 
@@ -324,6 +334,57 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled
+        }
+    }
+
+    val themeMode: Flow<AppThemeMode> = context.dataStore.data.map { preferences ->
+        val raw = preferences[KEY_THEME_MODE]
+        try {
+            if (raw != null) AppThemeMode.valueOf(raw) else AppThemeMode.SYSTEM
+        } catch (_: Exception) {
+            AppThemeMode.SYSTEM
+        }
+    }
+
+    suspend fun setThemeMode(mode: AppThemeMode) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_THEME_MODE] = mode.name
+        }
+    }
+
+    val walkingBufferMinutes: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[KEY_WALKING_BUFFER_MINUTES] ?: DEFAULT_WALKING_BUFFER_MINUTES
+    }
+
+    suspend fun setWalkingBufferMinutes(minutes: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_WALKING_BUFFER_MINUTES] = minutes
+        }
+    }
+
+    val favoriteZones: Flow<List<FavoriteZone>> = context.dataStore.data.map { preferences ->
+        FavoriteZone.listFromJsonString(preferences[KEY_FAVORITE_ZONES])
+    }
+
+    suspend fun setFavoriteZones(zones: List<FavoriteZone>) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_FAVORITE_ZONES] = FavoriteZone.listToJsonString(zones)
+        }
+    }
+
+    suspend fun addFavoriteZone(zone: FavoriteZone) {
+        context.dataStore.edit { preferences ->
+            val current = FavoriteZone.listFromJsonString(preferences[KEY_FAVORITE_ZONES])
+            val updated = (current.filterNot { it.id == zone.id || it.name.equals(zone.name, ignoreCase = true) } + zone)
+            preferences[KEY_FAVORITE_ZONES] = FavoriteZone.listToJsonString(updated)
+        }
+    }
+
+    suspend fun removeFavoriteZone(zoneId: String) {
+        context.dataStore.edit { preferences ->
+            val current = FavoriteZone.listFromJsonString(preferences[KEY_FAVORITE_ZONES])
+            val updated = current.filterNot { it.id == zoneId }
+            preferences[KEY_FAVORITE_ZONES] = FavoriteZone.listToJsonString(updated)
         }
     }
 }

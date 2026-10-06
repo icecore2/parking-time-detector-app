@@ -40,7 +40,25 @@ object ParkingAlarmScheduler {
             setExactAlarm(alarmManager, advanceTimeMillis, advancePI)
         }
 
-        // 2. Critical Warning Alarm (e.g. 2 mins before expiry)
+        // 2. Walking Buffer Alarm (e.g. 5-15 mins before expiry)
+        if (session.walkingBufferMinutes > 0) {
+            val walkTimeMillis = session.endTimeMillis - (session.walkingBufferMinutes * 60 * 1000L)
+            if (walkTimeMillis > now && !session.isNotifiedWalkBuffer) {
+                val walkIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+                    action = ParkingAlarmReceiver.ACTION_WALK_BUFFER_WARNING
+                    putExtra(ParkingAlarmReceiver.EXTRA_SESSION_ID, session.id)
+                }
+                val walkPI = PendingIntent.getBroadcast(
+                    context,
+                    (session.id * 10 + 4).toInt(),
+                    walkIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                setExactAlarm(alarmManager, walkTimeMillis, walkPI)
+            }
+        }
+
+        // 3. Critical Warning Alarm (e.g. 2 mins before expiry)
         val criticalTimeMillis = session.endTimeMillis - (criticalWarningMinutes * 60 * 1000L)
         if (criticalTimeMillis > now && !session.isNotifiedCritical) {
             val criticalIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
@@ -120,6 +138,20 @@ object ParkingAlarmScheduler {
         if (criticalPI != null) {
             alarmManager.cancel(criticalPI)
             criticalPI.cancel()
+        }
+
+        val walkIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+            action = ParkingAlarmReceiver.ACTION_WALK_BUFFER_WARNING
+        }
+        val walkPI = PendingIntent.getBroadcast(
+            context,
+            (sessionId * 10 + 4).toInt(),
+            walkIntent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (walkPI != null) {
+            alarmManager.cancel(walkPI)
+            walkPI.cancel()
         }
 
         val expireIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {

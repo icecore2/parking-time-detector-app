@@ -28,14 +28,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import com.parktimedetector.audio.SoundProfileType
 import com.parktimedetector.audio.VibrationPatternType
+import com.parktimedetector.data.AppThemeMode
+import com.parktimedetector.data.FavoriteZone
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -43,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -105,7 +117,90 @@ fun SettingsScreen(
         }
     }
 
+    val currentThemeMode by viewModel.themeMode.collectAsState()
+    val walkingBufferMinutes by viewModel.walkingBufferMinutes.collectAsState()
+    val favoriteZones by viewModel.favoriteZones.collectAsState()
+
+    var showAddZoneDialog by remember { mutableStateOf(false) }
+    var newZoneName by remember { mutableStateOf("") }
+    var newZoneDuration by remember { mutableStateOf(60) }
+    var newZoneNotes by remember { mutableStateOf("") }
+
     val warningOptions = listOf(5, 10, 15, 20, 30)
+    val walkingBufferOptions = listOf(0, 5, 10, 15, 20)
+
+    if (showAddZoneDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showAddZoneDialog = false },
+            title = { Text("Add Favorite Parking Zone") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newZoneName,
+                        onValueChange = { newZoneName = it },
+                        label = { Text("Zone Name / ID (e.g. Zone 4022)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        value = newZoneNotes,
+                        onValueChange = { newZoneNotes = it },
+                        label = { Text("Notes / Spot (e.g. Level 2B, Meter #4)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    Text("Default Duration: ${newZoneDuration}m", style = MaterialTheme.typography.bodySmall)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(30, 60, 90, 120).forEach { mins ->
+                            val sel = newZoneDuration == mins
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { newZoneDuration = mins }
+                            ) {
+                                Text(
+                                    "${mins}m",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newZoneName.isNotBlank()) {
+                            viewModel.addFavoriteZone(
+                                name = newZoneName.trim(),
+                                durationMinutes = newZoneDuration,
+                                notes = newZoneNotes.trim().ifBlank { null }
+                            )
+                            newZoneName = ""
+                            newZoneNotes = ""
+                            showAddZoneDialog = false
+                            Toast.makeText(context, "Saved favorite zone", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) {
+                    Text("Add Favorite")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showAddZoneDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
     Column(
         modifier = modifier
@@ -115,33 +210,243 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
-            text = "Settings & Diagnostics",
+            text = "Settings & Preferences",
             style = MaterialTheme.typography.headlineMedium,
-            color = TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold
         )
 
-        // 1. Advance Reminder Card
+        // 0. Theme Mode Selector Card
         Card(
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = PrimaryBlue)
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Appearance & Theme",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Choose your preferred interface theme. Full light and OLED dark modes available.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val themeOptions = listOf(
+                        Triple(AppThemeMode.SYSTEM, "System", Icons.Default.BrightnessAuto),
+                        Triple(AppThemeMode.LIGHT, "Light", Icons.Default.LightMode),
+                        Triple(AppThemeMode.DARK, "Dark", Icons.Default.DarkMode)
+                    )
+
+                    themeOptions.forEach { (mode, label, icon) ->
+                        val isSelected = currentThemeMode == mode
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.setThemeMode(mode) },
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 1. Walking Back Buffer Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DirectionsWalk, contentDescription = null, tint = AmberWarning)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Time to Walk Back Buffer",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Triggers a high-priority heads-up warning ahead of time so you can begin walking back to your car before the meter expires.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    walkingBufferOptions.forEach { minutes ->
+                        val isSelected = walkingBufferMinutes == minutes
+                        Surface(
+                            color = if (isSelected) AmberWarning else MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) AmberWarning else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { viewModel.setWalkingBufferMinutes(minutes) }
+                        ) {
+                            Text(
+                                text = if (minutes == 0) "Disabled (0m)" else "$minutes mins",
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                color = if (isSelected) com.parktimedetector.ui.theme.DarkNavy else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Favorite Parking Zones Manager Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Star, contentDescription = null, tint = AmberWarning)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Favorite Parking Zones",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    IconButton(onClick = { showAddZoneDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Favorite Zone", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Frequent lots or street meters with quick 1-tap start chips on the Home screen.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                if (favoriteZones.isEmpty()) {
+                    Text(
+                        text = "No favorite zones saved yet. Tap + to add frequent meters.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        favoriteZones.forEach { fav ->
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(fav.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        Text(
+                                            "${fav.defaultDurationMinutes}m default" + (fav.notes?.let { " • $it" } ?: ""),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.removeFavoriteZone(fav.id) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Remove", tint = RoseRed, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Advance Reminder Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Advance Renewal Alert",
                         style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "Notify me this much time before the parking session ends, so I have enough time to renew in ParkedIn.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -154,8 +459,12 @@ fun SettingsScreen(
                     warningOptions.forEach { minutes ->
                         val isSelected = advanceWarningMinutes == minutes
                         Surface(
-                            color = if (isSelected) PrimaryBlue else SurfaceDark,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(10.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .clickable { viewModel.updateAdvanceWarning(minutes) }
@@ -163,7 +472,7 @@ fun SettingsScreen(
                             Text(
                                 text = "$minutes mins${if (minutes == 15) " (Default)" else ""}",
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                color = if (isSelected) Color.Black else TextPrimary,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }

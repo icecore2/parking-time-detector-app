@@ -14,6 +14,7 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_ADVANCE_WARNING = "com.parktimedetector.ACTION_ADVANCE_WARNING"
+        const val ACTION_WALK_BUFFER_WARNING = "com.parktimedetector.ACTION_WALK_BUFFER_WARNING"
         const val ACTION_CRITICAL_WARNING = "com.parktimedetector.ACTION_CRITICAL_WARNING"
         const val ACTION_EXPIRED = "com.parktimedetector.ACTION_EXPIRED"
         const val ACTION_CANCEL_SESSION = "com.parktimedetector.ACTION_CANCEL_SESSION"
@@ -48,6 +49,12 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                             dao.update(session.copy(isNotifiedAdvance = true))
                         }
                     }
+                    ACTION_WALK_BUFFER_WARNING -> {
+                        if (session != null && session.isActive) {
+                            NotificationHelper.showWalkBufferNotification(context, session)
+                            dao.update(session.copy(isNotifiedWalkBuffer = true))
+                        }
+                    }
                     ACTION_CRITICAL_WARNING -> {
                         if (session != null && session.isActive) {
                             NotificationHelper.showCriticalWarningNotification(context, session)
@@ -70,6 +77,7 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                             val updated = session.copy(
                                 endTimeMillis = newEndTime,
                                 isNotifiedAdvance = false,
+                                isNotifiedWalkBuffer = false,
                                 isNotifiedCritical = false,
                                 isNotifiedExpiry = false
                             )
@@ -77,6 +85,8 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                             ParkingAlarmScheduler.scheduleAlarms(context, updated)
                             NotificationHelper.showActiveCountdownNotification(context, updated)
                             NotificationHelper.cancelCriticalWarningNotification(context)
+                            NotificationHelper.cancelAdvanceWarningNotification(context)
+                            NotificationHelper.cancelWalkBufferNotification(context)
                         }
                     }
                     ACTION_CANCEL_SESSION -> {
@@ -85,6 +95,8 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                         ParkingAlarmScheduler.cancelAlarms(context, sessionId)
                         NotificationHelper.cancelStatusNotification(context)
                         NotificationHelper.cancelCriticalWarningNotification(context)
+                        NotificationHelper.cancelAdvanceWarningNotification(context)
+                        NotificationHelper.cancelWalkBufferNotification(context)
                     }
                 }
             } finally {

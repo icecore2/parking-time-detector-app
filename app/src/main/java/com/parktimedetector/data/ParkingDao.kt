@@ -40,6 +40,15 @@ interface ParkingDao {
     @Query("UPDATE parking_sessions SET isActive = 0, actualStopTimeMillis = :stopTime, costOrRefundText = COALESCE(:costOrRefund, costOrRefundText), stopReason = :stopReason, locationAddress = COALESCE(:locationAddress, locationAddress) WHERE id = :id")
     suspend fun endSessionWithFullDetails(id: Long, stopTime: Long, costOrRefund: String?, stopReason: String?, locationAddress: String? = null)
 
+    @Query("UPDATE parking_sessions SET spotDetails = :spotDetails WHERE id = :id")
+    suspend fun updateSpotDetails(id: Long, spotDetails: String?)
+
+    @Query("UPDATE parking_sessions SET parkedLatitude = :lat, parkedLongitude = :lng WHERE id = :id")
+    suspend fun updateParkedCoordinates(id: Long, lat: Double?, lng: Double?)
+
+    @Query("SELECT * FROM parking_sessions WHERE parkedLatitude IS NOT NULL AND parkedLongitude IS NOT NULL ORDER BY startTimeMillis DESC LIMIT 50")
+    suspend fun getSessionsWithCoordinates(): List<ParkingSession>
+
     @Query("SELECT * FROM parking_sessions WHERE (packageName = :packageName OR :packageName IS NULL) AND (:zoneOrLot IS NULL OR zoneOrLot = :zoneOrLot) AND startTimeMillis >= :minStartTime ORDER BY startTimeMillis DESC LIMIT 1")
     suspend fun findMatchingRecentSession(packageName: String, zoneOrLot: String?, minStartTime: Long): ParkingSession?
 

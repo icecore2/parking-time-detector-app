@@ -26,6 +26,8 @@ object NotificationHelper {
     const val NOTIFICATION_ID_ADVANCE = 1002
     const val NOTIFICATION_ID_EXPIRED = 1003
     const val NOTIFICATION_ID_CRITICAL = 1006
+    const val NOTIFICATION_ID_WALK_BUFFER = 1008
+    const val CHANNEL_WALK_BUFFER_ID = "parking_walk_buffer_alerts"
 
     const val PARKEDIN_PACKAGE = "com.preciseparklink.parkedin"
     const val MYPARKING_PACKAGE = "com.cpa.accountManagement"
@@ -76,9 +78,21 @@ object NotificationHelper {
                 setShowBadge(false)
             }
 
+            // 4. Warning channel for Walking Buffer Alert
+            val walkChannel = NotificationChannel(
+                CHANNEL_WALK_BUFFER_ID,
+                "Walk Back To Car Buffer",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifies you when it is time to start walking back to your car before parking expires"
+                enableVibration(true)
+                setShowBadge(true)
+            }
+
             notificationManager.createNotificationChannel(urgentChannel)
             notificationManager.createNotificationChannel(statusChannel)
             notificationManager.createNotificationChannel(quietApprovalChannel)
+            notificationManager.createNotificationChannel(walkChannel)
         }
     }
 
@@ -177,6 +191,7 @@ object NotificationHelper {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         val openAppPI = createTargetAppPendingIntent(context, session.packageName, 101)
         val endSessionPI = createEndSessionPendingIntent(context, session.id)
+        val extendPI = createExtendAlarmPendingIntent(context, session.id, 15, 108)
 
         val appName = getAppNameForPackage(session.packageName)
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -202,6 +217,7 @@ object NotificationHelper {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicStatusNotification)
             .setContentIntent(openAppPI)
+            .addAction(0, "⚡ +15m", extendPI)
             .addAction(0, "Open $appName", openAppPI)
             .addAction(0, "End Parking", endSessionPI)
 
@@ -490,6 +506,50 @@ object NotificationHelper {
         notificationManager.cancel(NOTIFICATION_ID_STATUS)
     }
 
+    /**
+     * Shows notification alerting the user that it's time to start walking back to their car.
+     */
+    fun showWalkBufferNotification(context: Context, session: ParkingSession) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        val openAppPI = createTargetAppPendingIntent(context, session.packageName, 105)
+        val extendPI = createExtendAlarmPendingIntent(context, session.id, 15, 109)
+
+        val appName = getAppNameForPackage(session.packageName)
+        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+        val formattedEndTime = timeFormat.format(Date(session.endTimeMillis))
+        val buffer = session.walkingBufferMinutes
+        val zoneText = session.zoneOrLot?.let { " at $it" } ?: ""
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_WALK_BUFFER_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("🚶 Time to Walk Back$zoneText!")
+            .setContentText("Expires at $formattedEndTime (${buffer}m walk buffer). Start heading to your car!")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    "Walking Buffer Reminder: Your parking session$zoneText expires at $formattedEndTime.\n\n" +
+                    "You have a $buffer-minute walking buffer to reach your car on time. Tap 'Extend' or open $appName to renew."
+                )
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setContentIntent(openAppPI)
+            .addAction(0, "⚡ +15m", extendPI)
+            .addAction(0, "Open $appName", openAppPI)
+
+        notificationManager.notify(NOTIFICATION_ID_WALK_BUFFER, builder.build())
+    }
+
+    fun cancelAdvanceWarningNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(NOTIFICATION_ID_ADVANCE)
+    }
+
+    fun cancelWalkBufferNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(NOTIFICATION_ID_WALK_BUFFER)
+    }
+
     fun cancelCriticalWarningNotification(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         notificationManager.cancel(NOTIFICATION_ID_CRITICAL)
@@ -503,6 +563,7 @@ object NotificationHelper {
         notificationManager.cancel(NOTIFICATION_ID_EXPIRED)
         notificationManager.cancel(NOTIFICATION_ID_APPROVAL)
         notificationManager.cancel(NOTIFICATION_ID_STOP_APPROVAL)
+        notificationManager.cancel(NOTIFICATION_ID_WALK_BUFFER)
         com.parktimedetector.audio.AlarmSoundManager.stop(context)
     }
 }

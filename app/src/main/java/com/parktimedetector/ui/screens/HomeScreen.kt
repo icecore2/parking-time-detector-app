@@ -45,6 +45,19 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import com.parktimedetector.ui.components.ParkingCircularGauge
 import com.parktimedetector.ui.components.ParkingUrgencyState
+import com.parktimedetector.ui.components.CustomExtensionDialog
+import com.parktimedetector.ui.components.SpotLocationDialog
+import com.parktimedetector.location.LocationHelper
+import com.parktimedetector.location.ZoneDiscoveryManager
+import com.parktimedetector.location.DiscoveredZoneResult
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -228,7 +241,7 @@ fun HomeScreen(
                     Text(
                         text = "${stop.displayLocation} ended at $formattedStop$durationText$costText",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -242,13 +255,13 @@ fun HomeScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Accept & End Timer", color = com.parktimedetector.ui.theme.DarkNavy, fontWeight = FontWeight.Bold)
+                            Text("Accept & End Timer", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
                             onClick = { viewModel.dismissPendingStopDetection() },
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("Dismiss", color = TextSecondary)
+                            Text("Dismiss", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -309,7 +322,7 @@ fun HomeScreen(
                     Text(
                         text = "Suggested: Start parking timer for ${detection.displayLocation}\nSession: $formattedStart – $formattedEnd (~$durationStr)${detection.initialCostText?.let { " • $it" } ?: ""}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -323,7 +336,7 @@ fun HomeScreen(
                             shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Start Timer", color = com.parktimedetector.ui.theme.DarkNavy, fontWeight = FontWeight.Bold)
+                            Text("Start Timer", color = Color.White, fontWeight = FontWeight.Bold)
                         }
                         OutlinedButton(
                             onClick = { viewModel.dismissPendingDetection() },
@@ -353,8 +366,9 @@ fun HomeScreen(
                 alwaysDetect = alwaysDetect
             )
             ManualTimerSetupCard(
-                onStartTimer = { duration, zone ->
-                    viewModel.startManualSession(duration, zone)
+                viewModel = viewModel,
+                onStartTimer = { duration, zone, spot, lat, lng ->
+                    viewModel.startManualSession(duration, zone, spot, lat, lng)
                 }
             )
         }
@@ -390,7 +404,7 @@ fun PermissionBanner(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
@@ -420,6 +434,10 @@ fun ActiveSessionCard(
     val criticalWarningMinutes by viewModel.criticalWarningMinutes.collectAsState()
     val isAlarmPlaying by viewModel.isAlarmPlaying.collectAsState()
     val hapticsEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
+    val favoriteZones by viewModel.favoriteZones.collectAsState()
+
+    var showCustomExtensionDialog by remember { mutableStateOf(false) }
+    var showSpotLocationDialog by remember { mutableStateOf(false) }
 
     // Live clock ticker every second
     LaunchedEffect(session.id) {
@@ -432,12 +450,13 @@ fun ActiveSessionCard(
     val remainingMillis = session.remainingMillis(currentTime)
     val isExpired = session.isExpired(currentTime)
     val inAdvanceWarning = session.isInAdvanceWarningZone(currentTime)
+    val inWalkBuffer = session.isInWalkingBufferZone(currentTime)
     val isCritical = session.isInCriticalZone(currentTime, criticalWarningMinutes)
 
     val urgencyState = when {
         isExpired -> ParkingUrgencyState.EXPIRED
         isCritical -> ParkingUrgencyState.CRITICAL
-        inAdvanceWarning -> ParkingUrgencyState.WARNING
+        inAdvanceWarning || inWalkBuffer -> ParkingUrgencyState.WARNING
         else -> ParkingUrgencyState.SAFE
     }
 
@@ -445,14 +464,11 @@ fun ActiveSessionCard(
     val remainingMinutes = (remainingMillis / (1000 * 60)) % 60
     val remainingHours = remainingMillis / (1000 * 60 * 60)
 
-    val timeString = if (isExpired) {
-        "EXPIRED"
-    } else {
-        String.format(Locale.US, "%02d:%02d:%02d", remainingHours, remainingMinutes, remainingSeconds)
-    }
-
     val totalDuration = session.totalDurationMillis.coerceAtLeast(1L)
     val progress = if (isExpired) 1f else (1f - (remainingMillis.toFloat() / totalDuration)).coerceIn(0f, 1f)
+    val walkingBufferFraction = if (session.walkingBufferMinutes > 0) {
+        ((session.walkingBufferMinutes * 60 * 1000L).toFloat() / totalDuration).coerceIn(0f, 1f)
+    } else 0f
 
     val statusColor = when (urgencyState) {
         ParkingUrgencyState.EXPIRED -> RoseRed
@@ -461,20 +477,52 @@ fun ActiveSessionCard(
         ParkingUrgencyState.SAFE -> EmeraldGreen
     }
 
-    val statusText = when (urgencyState) {
-        ParkingUrgencyState.EXPIRED -> "PARKING EXPIRED"
-        ParkingUrgencyState.CRITICAL -> "CRITICAL: EXPIRING SOON"
-        ParkingUrgencyState.WARNING -> "EXPIRING SOON"
-        ParkingUrgencyState.SAFE -> "ACTIVE SESSION"
+    val statusText = when {
+        isExpired -> "PARKING EXPIRED"
+        isCritical -> "CRITICAL: EXPIRING SOON"
+        inWalkBuffer -> "TIME TO WALK BACK TO CAR"
+        inAdvanceWarning -> "EXPIRING SOON"
+        else -> "ACTIVE SESSION"
     }
 
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
     val endTimeString = timeFormat.format(Date(session.endTimeMillis))
     val startTimeString = timeFormat.format(Date(session.startTimeMillis))
 
+    if (showCustomExtensionDialog) {
+        CustomExtensionDialog(
+            currentEndTimeMillis = session.endTimeMillis,
+            onDismiss = { showCustomExtensionDialog = false },
+            onExtendMinutes = { extraMinutes ->
+                if (hapticsEnabled) {
+                    com.parktimedetector.audio.VibrationHelper.performQuickExtendHaptic(context)
+                }
+                viewModel.extendCurrentSession(extraMinutes)
+            },
+            onSetTargetEndTime = { targetTime ->
+                if (hapticsEnabled) {
+                    com.parktimedetector.audio.VibrationHelper.performQuickExtendHaptic(context)
+                }
+                viewModel.extendCurrentSessionToTargetTime(targetTime)
+            }
+        )
+    }
+
+    if (showSpotLocationDialog) {
+        SpotLocationDialog(
+            initialSpotDetails = session.spotDetails,
+            parkedLatitude = session.parkedLatitude,
+            parkedLongitude = session.parkedLongitude,
+            onSaveSpot = { spot -> viewModel.updateActiveSessionSpotDetails(spot) },
+            onSaveLocation = { lat, lng -> viewModel.updateActiveSessionLocation(lat, lng) },
+            onClearLocation = { viewModel.updateActiveSessionLocation(0.0, 0.0) },
+            onDismiss = { showSpotLocationDialog = false }
+        )
+    }
+
     Card(
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier
             .fillMaxWidth()
             .border(2.dp, statusColor.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
@@ -527,51 +575,171 @@ fun ActiveSessionCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Enhanced Dynamic Circular Gauge Display with animations
+            // Redesigned Hero Circular Gauge Display
             ParkingCircularGauge(
                 progress = progress,
-                timeString = timeString,
-                subtitleText = when (urgencyState) {
-                    ParkingUrgencyState.EXPIRED -> "Renew now!"
-                    ParkingUrgencyState.CRITICAL -> "Critical Zone (< ${criticalWarningMinutes}m)!"
-                    ParkingUrgencyState.WARNING -> "Expiring soon"
-                    ParkingUrgencyState.SAFE -> "Time remaining"
+                hours = remainingHours,
+                minutes = remainingMinutes,
+                seconds = remainingSeconds,
+                subtitleText = when {
+                    isExpired -> "Renew now!"
+                    isCritical -> "Critical Zone (< ${criticalWarningMinutes}m)!"
+                    inWalkBuffer -> "Walk Back Buffer (${session.walkingBufferMinutes}m)!"
+                    inAdvanceWarning -> "Expiring soon"
+                    else -> "Time remaining"
                 },
                 urgencyState = urgencyState,
-                modifier = Modifier.size(200.dp)
+                walkingBufferFraction = walkingBufferFraction,
+                hapticsEnabled = hapticsEnabled,
+                modifier = Modifier.size(230.dp)
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // "Where Did I Park?" Quick Card
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Place,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Where Did I Park?",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = when {
+                                !session.spotDetails.isNullOrBlank() -> "Spot: ${session.spotDetails}"
+                                session.parkedLatitude != null -> "GPS Location Pinned"
+                                else -> "Tap to note spot or pin GPS"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (session.parkedLatitude != null && session.parkedLongitude != null) {
+                            Surface(
+                                color = EmeraldGreen.copy(alpha = 0.18f),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        val intent = LocationHelper.createWalkingDirectionsIntent(
+                                            session.parkedLatitude,
+                                            session.parkedLongitude
+                                        )
+                                        context.startActivity(intent)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.DirectionsWalk, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Walk", color = EmeraldGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = { showSpotLocationDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Note / GPS", fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Session Metadata
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(SurfaceDark)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Expires at:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(endTimeString, color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("Expires at:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    Text(endTimeString, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Started at:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(startTimeString, color = TextPrimary)
+                    Text("Started at:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    Text(startTimeString, color = MaterialTheme.colorScheme.onSurface)
                 }
                 if (!session.zoneOrLot.isNullOrBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Location / Zone:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(session.zoneOrLot, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            val isFavorite = favoriteZones.any { it.name.equals(session.zoneOrLot, ignoreCase = true) }
+                            if (!isFavorite) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .clickable { viewModel.addFavoriteZone(session.zoneOrLot, 60, session.locationAddress) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.StarBorder, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(12.dp))
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text("+Fav", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (session.walkingBufferMinutes > 0) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Location / Zone:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                        Text(session.zoneOrLot, color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                        Text("Walking Buffer:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Text("${session.walkingBufferMinutes} mins before end", color = AmberWarning, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 if (!session.locationAddress.isNullOrBlank()) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Street Address:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        Text("Street Address:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             session.locationAddress,
-                            color = TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.fillMaxWidth(0.65f),
                             textAlign = TextAlign.End
@@ -580,13 +748,13 @@ fun ActiveSessionCard(
                 }
                 if (!session.purchasedDurationText.isNullOrBlank()) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Duration:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                        Text(session.purchasedDurationText, color = TextPrimary)
+                        Text("Duration:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Text(session.purchasedDurationText, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 if (!session.initialCostText.isNullOrBlank()) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Cost / Rate:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        Text("Cost / Rate:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Text(session.initialCostText, color = EmeraldGreen, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -595,20 +763,20 @@ fun ActiveSessionCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(SurfaceDark.copy(alpha = 0.5f))
+                            .background(MaterialTheme.colorScheme.surface)
                             .padding(8.dp)
                     ) {
-                        Text("Note", style = MaterialTheme.typography.labelSmall, color = TextMuted)
-                        Text(session.notesText, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text("Note", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(session.notesText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Detection Source:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(session.source, color = TextPrimary)
+                    Text("Detection Source:", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    Text(session.source, color = MaterialTheme.colorScheme.onSurface)
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             val appName = com.parktimedetector.notification.NotificationHelper.getAppNameForPackage(session.packageName)
 
@@ -618,21 +786,21 @@ fun ActiveSessionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(14.dp)
             ) {
-                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         text = "⚡ Quick-Renew in $appName",
-                        color = Color.Black,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
                     Text(
                         text = if (appName == "MyParking") "Auto-searches zone & prepares session" else "Auto-opens extend screen",
-                        color = DarkNavy.copy(alpha = 0.85f),
+                        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
                         fontSize = 11.sp
                     )
                 }
@@ -646,25 +814,25 @@ fun ActiveSessionCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp)
             ) {
-                Icon(Icons.Default.OpenInNew, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Open $appName Manually", color = TextSecondary, fontSize = 13.sp)
+                Text("Open $appName Manually", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Quick Extension Buttons
+            // Quick Extension Buttons Row (with +Custom)
             Text(
-                text = "Quick Extend Timer",
+                text = "Extend Parking Time",
                 style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.align(Alignment.Start)
             )
             Spacer(modifier = Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedButton(
                     onClick = {
@@ -674,9 +842,10 @@ fun ActiveSessionCard(
                         onExtend(15)
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                 ) {
-                    Text("+15m", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("+15m", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
                 OutlinedButton(
                     onClick = {
@@ -686,9 +855,10 @@ fun ActiveSessionCard(
                         onExtend(30)
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                 ) {
-                    Text("+30m", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("+30m", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                 }
                 OutlinedButton(
                     onClick = {
@@ -698,9 +868,21 @@ fun ActiveSessionCard(
                         onExtend(60)
                     },
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                 ) {
-                    Text("+1h", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("+1h", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                }
+                Button(
+                    onClick = { showCustomExtensionDialog = true },
+                    modifier = Modifier.weight(1.2f),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.Schedule, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("+Custom", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
 
@@ -734,7 +916,7 @@ fun ActiveSessionCard(
                             Text("Keep Active")
                         }
                     },
-                    containerColor = SurfaceDark
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             }
 
@@ -761,7 +943,7 @@ fun NoActiveSessionCard(
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -771,20 +953,21 @@ fun NoActiveSessionCard(
             Icon(
                 Icons.Default.DirectionsCar,
                 contentDescription = null,
-                tint = PrimaryBlue,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(44.dp)
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = "No Active Parking Session",
                 style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "When you start parking in ParkedIn or MyParking, the app will automatically detect it and set a timer with renewal alerts!",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -795,22 +978,22 @@ fun NoActiveSessionCard(
                 Button(
                     onClick = onOpenParkedIn,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("ParkedIn", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                    Text("ParkedIn", color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = onOpenMyParking,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceDark),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("MyParking", color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text("MyParking", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -819,7 +1002,7 @@ fun NoActiveSessionCard(
                 Text(
                     text = "💡 Pressing either app button activates a 5-minute detection window (resets if pressed again).",
                     style = MaterialTheme.typography.labelSmall,
-                    color = AccentCyan,
+                    color = MaterialTheme.colorScheme.primary,
                     textAlign = TextAlign.Center
                 )
             }
@@ -830,38 +1013,111 @@ fun NoActiveSessionCard(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ManualTimerSetupCard(
-    onStartTimer: (durationMinutes: Int, zone: String?) -> Unit
+    viewModel: ParkingViewModel,
+    onStartTimer: (durationMinutes: Int, zone: String?, spotDetails: String?, lat: Double?, lng: Double?) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedMinutes by remember { mutableStateOf(60) }
     var zoneInput by remember { mutableStateOf("") }
+    var spotDetailsInput by remember { mutableStateOf("") }
+    var pinGpsLocation by remember { mutableStateOf(false) }
+
+    val favoriteZones by viewModel.favoriteZones.collectAsState()
+    var nearbyZoneResult by remember { mutableStateOf<DiscoveredZoneResult?>(null) }
+    var isDetectingLocation by remember { mutableStateOf(false) }
+
+    // Auto-detect nearby zone if location permissions are available
+    LaunchedEffect(Unit) {
+        if (LocationHelper.hasLocationPermission(context)) {
+            isDetectingLocation = true
+            viewModel.autoDetectNearbyZone(context) { detected ->
+                nearbyZoneResult = detected
+                if (detected != null && zoneInput.isBlank()) {
+                    zoneInput = detected.zoneOrLot
+                }
+                isDetectingLocation = false
+            }
+        }
+    }
 
     val presets = listOf(15, 30, 45, 60, 90, 120, 180)
 
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Alarm, contentDescription = null, tint = PrimaryBlue)
+                Icon(Icons.Default.Alarm, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Set In-App Parking Timer",
                     style = MaterialTheme.typography.titleLarge,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
                 )
             }
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Paid at a parking meter or web QR code? Start a timer here to receive the same live notifications and ParkedIn renewal alerts.",
+                text = "Paid at a parking meter or web QR code? Start a timer here to receive live notifications and walking buffer alerts.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            // Automated Zone Discovery Chip Banner
+            if (nearbyZoneResult != null) {
+                val detected = nearbyZoneResult!!
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = EmeraldGreen.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            zoneInput = detected.zoneOrLot
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-Detected Zone Nearby",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = EmeraldGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${detected.zoneOrLot}${detected.address?.let { " - $it" } ?: ""} (${detected.distanceMeters.toInt()}m away)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = EmeraldGreen
+                        ) {
+                            Text(
+                                text = "Use",
+                                color = DarkNavy,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("Select Duration:", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
+            Text("Select Duration:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
             Spacer(modifier = Modifier.height(8.dp))
 
             FlowRow(
@@ -880,7 +1136,7 @@ fun ManualTimerSetupCard(
                     }
 
                     Surface(
-                        color = if (isSelected) PrimaryBlue else SurfaceDark,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
@@ -889,9 +1145,62 @@ fun ManualTimerSetupCard(
                         Text(
                             text = label,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            color = if (isSelected) Color.Black else TextPrimary,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
+                    }
+                }
+            }
+
+            // Favorite Parking Zones Quick Chips
+            if (favoriteZones.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Favorite Zones:", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    favoriteZones.forEach { fav ->
+                        val isSelected = zoneInput == fav.name
+                        Surface(
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(8.dp),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    zoneInput = fav.name
+                                    selectedMinutes = fav.defaultDurationMinutes
+                                    if (!fav.notes.isNullOrBlank()) {
+                                        spotDetailsInput = fav.notes
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = AmberWarning,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = fav.name,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -901,31 +1210,85 @@ fun ManualTimerSetupCard(
             OutlinedTextField(
                 value = zoneInput,
                 onValueChange = { zoneInput = it },
-                label = { Text("Zone / Lot (Optional, e.g. Zone 4022)") },
+                label = { Text("Zone / Lot (e.g. Zone 4022)") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = TextMuted,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                ),
                 shape = RoundedCornerShape(10.dp)
             )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = spotDetailsInput,
+                onValueChange = { spotDetailsInput = it },
+                label = { Text("Where Did I Park? (e.g. Level 2B, Spot #42)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Pin GPS Location Checkbox / Toggle
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { pinGpsLocation = !pinGpsLocation }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Checkbox(
+                    checked = pinGpsLocation,
+                    onCheckedChange = { pinGpsLocation = it }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        "Pin GPS Location of Vehicle",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Saves vehicle coordinates for 1-tap walking directions back",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(18.dp))
 
             Button(
-                onClick = { onStartTimer(selectedMinutes, zoneInput) },
+                onClick = {
+                    if (pinGpsLocation && LocationHelper.hasLocationPermission(context)) {
+                        val loc = LocationHelper.getLastKnownLocation(context)
+                        onStartTimer(
+                            selectedMinutes,
+                            zoneInput.ifBlank { null },
+                            spotDetailsInput.ifBlank { null },
+                            loc?.latitude,
+                            loc?.longitude
+                        )
+                    } else {
+                        onStartTimer(
+                            selectedMinutes,
+                            zoneInput.ifBlank { null },
+                            spotDetailsInput.ifBlank { null },
+                            null,
+                            null
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
+                Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Start Parking Timer", color = Color.Black, fontWeight = FontWeight.Bold)
+                Text("Start Parking Timer", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -946,11 +1309,11 @@ fun ManualDetectionControlCard(
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isDetectionActive) EmeraldGreen.copy(alpha = 0.12f) else CardBackground
+            containerColor = if (isDetectionActive) EmeraldGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (isDetectionActive) EmeraldGreen else SurfaceDark
+            if (isDetectionActive) EmeraldGreen else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = modifier.fillMaxWidth()
     ) {
@@ -967,7 +1330,7 @@ fun ManualDetectionControlCard(
                         text = if (isDetectionActive) "Detection Window Active" else "Manual Detection Mode",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = if (isDetectionActive) EmeraldGreen else TextPrimary
+                        color = if (isDetectionActive) EmeraldGreen else MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -995,7 +1358,7 @@ fun ManualDetectionControlCard(
                     "'Always detect' is off in Settings. Tap 'Start Detection' to begin a 5-minute detection window, or tap a supported app button below."
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1007,7 +1370,7 @@ fun ManualDetectionControlCard(
                 Button(
                     onClick = onStartOrReset,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isDetectionActive) EmeraldGreen else PrimaryBlue
+                        containerColor = if (isDetectionActive) EmeraldGreen else MaterialTheme.colorScheme.primary
                     ),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f)
@@ -1015,13 +1378,13 @@ fun ManualDetectionControlCard(
                     Icon(
                         if (isDetectionActive) Icons.Default.Refresh else Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = if (isDetectionActive) DarkNavy else Color.White,
+                        tint = if (isDetectionActive) DarkNavy else MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = if (isDetectionActive) "Restart 5m" else "Start Detection",
-                        color = if (isDetectionActive) DarkNavy else Color.White,
+                        color = if (isDetectionActive) DarkNavy else MaterialTheme.colorScheme.onPrimary,
                         fontWeight = FontWeight.Bold
                     )
                 }

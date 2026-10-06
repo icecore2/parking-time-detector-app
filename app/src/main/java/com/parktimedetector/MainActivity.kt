@@ -94,7 +94,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            ParkingTimeDetectorTheme {
+            val themeMode by viewModel.themeMode.collectAsState()
+            ParkingTimeDetectorTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -164,7 +165,8 @@ fun MainAppContent(viewModel: ParkingViewModel) {
     Scaffold(
         topBar = {
             Surface(
-                color = SurfaceDark,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -178,7 +180,7 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                         Icon(
                             Icons.Default.Timer,
                             contentDescription = null,
-                            tint = PrimaryBlue,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(22.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
@@ -186,13 +188,13 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                             text = "ParkingTimeDetector",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
 
                     // Simulator Quick Launch Button
                     Surface(
-                        color = PrimaryBlue.copy(alpha = 0.2f),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
@@ -205,13 +207,13 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                             Icon(
                                 Icons.Default.BugReport,
                                 contentDescription = "Open Simulator",
-                                tint = PrimaryBlue,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Simulator",
-                                color = PrimaryBlue,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.labelMedium
                             )
@@ -222,59 +224,43 @@ fun MainAppContent(viewModel: ParkingViewModel) {
         },
         bottomBar = {
             NavigationBar(
-                containerColor = SurfaceDark
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 4.dp
             ) {
+                val navBarItemColors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 NavigationBarItem(
                     selected = currentTab == ScreenTab.HOME,
                     onClick = { currentTab = ScreenTab.HOME },
                     icon = { Icon(Icons.Default.Timer, contentDescription = "Timer") },
                     label = { Text("Timer") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = PrimaryBlue,
-                        indicatorColor = PrimaryBlue,
-                        unselectedIconColor = TextMuted,
-                        unselectedTextColor = TextMuted
-                    )
+                    colors = navBarItemColors
                 )
                 NavigationBarItem(
                     selected = currentTab == ScreenTab.HISTORY,
                     onClick = { currentTab = ScreenTab.HISTORY },
                     icon = { Icon(Icons.Default.History, contentDescription = "History") },
                     label = { Text("History") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = PrimaryBlue,
-                        indicatorColor = PrimaryBlue,
-                        unselectedIconColor = TextMuted,
-                        unselectedTextColor = TextMuted
-                    )
+                    colors = navBarItemColors
                 )
                 NavigationBarItem(
                     selected = currentTab == ScreenTab.LOGS,
                     onClick = { currentTab = ScreenTab.LOGS },
                     icon = { Icon(Icons.Default.BugReport, contentDescription = "Logs") },
                     label = { Text("Logs") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = PrimaryBlue,
-                        indicatorColor = PrimaryBlue,
-                        unselectedIconColor = TextMuted,
-                        unselectedTextColor = TextMuted
-                    )
+                    colors = navBarItemColors
                 )
                 NavigationBarItem(
                     selected = currentTab == ScreenTab.SETTINGS,
                     onClick = { currentTab = ScreenTab.SETTINGS },
                     icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
                     label = { Text("Settings") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = Color.Black,
-                        selectedTextColor = PrimaryBlue,
-                        indicatorColor = PrimaryBlue,
-                        unselectedIconColor = TextMuted,
-                        unselectedTextColor = TextMuted
-                    )
+                    colors = navBarItemColors
                 )
             }
         }
