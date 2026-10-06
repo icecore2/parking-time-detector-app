@@ -8,7 +8,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ParkingSession::class, LogEntry::class], version = 6, exportSchema = false)
+@Database(entities = [ParkingSession::class, LogEntry::class], version = 7, exportSchema = false)
 abstract class ParkingDatabase : RoomDatabase() {
     abstract fun parkingDao(): ParkingDao
     abstract fun logDao(): LogDao
@@ -27,6 +27,12 @@ abstract class ParkingDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE parking_sessions ADD COLUMN calendarEventId INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getDatabase(context: Context): ParkingDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -34,7 +40,7 @@ abstract class ParkingDatabase : RoomDatabase() {
                     ParkingDatabase::class.java,
                     "parking_time_detector_db"
                 )
-                    .addMigrations(MIGRATION_5_6)
+                    .addMigrations(MIGRATION_5_6, MIGRATION_6_7)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

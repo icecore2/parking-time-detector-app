@@ -67,6 +67,10 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                             NotificationHelper.showExpiredNotification(context, session)
                             com.parktimedetector.audio.AlarmSoundManager.startAlarm(context)
                             dao.update(session.copy(isActive = false, isNotifiedExpiry = true))
+                            if (session.calendarEventId != null) {
+                                com.parktimedetector.calendar.CalendarSyncManager.truncateEventToStop(context, session.calendarEventId, session.endTimeMillis)
+                            }
+                            com.parktimedetector.widget.ParkingWidgetManager.updateAll(context)
                         }
                     }
                     ACTION_EXTEND_ALARM -> {
@@ -87,6 +91,11 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                             NotificationHelper.cancelCriticalWarningNotification(context)
                             NotificationHelper.cancelAdvanceWarningNotification(context)
                             NotificationHelper.cancelWalkBufferNotification(context)
+
+                            if (session.calendarEventId != null) {
+                                com.parktimedetector.calendar.CalendarSyncManager.updateEventEndTime(context, session.calendarEventId, newEndTime)
+                            }
+                            com.parktimedetector.widget.ParkingWidgetManager.updateAll(context)
                         }
                     }
                     ACTION_CANCEL_SESSION -> {
@@ -97,6 +106,11 @@ class ParkingAlarmReceiver : BroadcastReceiver() {
                         NotificationHelper.cancelCriticalWarningNotification(context)
                         NotificationHelper.cancelAdvanceWarningNotification(context)
                         NotificationHelper.cancelWalkBufferNotification(context)
+
+                        if (session != null && session.calendarEventId != null) {
+                            com.parktimedetector.calendar.CalendarSyncManager.truncateEventToStop(context, session.calendarEventId, System.currentTimeMillis())
+                        }
+                        com.parktimedetector.widget.ParkingWidgetManager.updateAll(context)
                     }
                 }
             } finally {

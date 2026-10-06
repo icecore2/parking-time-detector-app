@@ -184,31 +184,40 @@ object NotificationHelper {
     }
 
     /**
-     * Shows live ongoing countdown notification.
+     * Shows live ongoing countdown notification with real-time progress bar and quick actions.
      * Pressing this notification opens the relevant parking app (ParkedIn or MyParking).
      */
     fun showActiveCountdownNotification(context: Context, session: ParkingSession) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
-        val openAppPI = createTargetAppPendingIntent(context, session.packageName, 101)
+        val targetAppPI = createTargetAppPendingIntent(context, session.packageName, 101)
+        val openAppPI = createAppPendingIntent(context, 102)
         val endSessionPI = createEndSessionPendingIntent(context, session.id)
-        val extendPI = createExtendAlarmPendingIntent(context, session.id, 15, 108)
+        val extend15PI = createExtendAlarmPendingIntent(context, session.id, 15, 108)
+        val extend30PI = createExtendAlarmPendingIntent(context, session.id, 30, 112)
 
         val appName = getAppNameForPackage(session.packageName)
         val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
         val formattedEndTime = timeFormat.format(Date(session.endTimeMillis))
-        val zoneInfo = session.zoneOrLot?.let { " ($it)" } ?: ""
+        val zoneInfo = session.zoneOrLot?.let { " • $it" } ?: ""
+
+        val totalDuration = (session.endTimeMillis - session.startTimeMillis).coerceAtLeast(1000L)
+        val elapsed = (System.currentTimeMillis() - session.startTimeMillis).coerceIn(0L, totalDuration)
+        val progressPercent = ((elapsed.toDouble() / totalDuration.toDouble()) * 100).toInt().coerceIn(0, 100)
+        val minutesRemaining = (session.remainingMillis() / (60 * 1000L)).coerceAtLeast(0L)
 
         val publicStatusNotification = NotificationCompat.Builder(context, CHANNEL_STATUS_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Active Parking")
             .setContentText("Parking timer in progress • Unlock device for details")
-            .setContentIntent(openAppPI)
+            .setContentIntent(targetAppPI)
             .build()
 
         val builder = NotificationCompat.Builder(context, CHANNEL_STATUS_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle("Active Parking$zoneInfo")
-            .setContentText("Expires at $formattedEndTime • Tap to open $appName")
+            .setContentText("Expires at $formattedEndTime (${minutesRemaining}m left)")
+            .setSubText("$progressPercent% elapsed")
+            .setProgress(100, progressPercent, false)
             .setWhen(session.endTimeMillis)
             .setUsesChronometer(true)
             .setChronometerCountDown(true)
@@ -216,10 +225,11 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(publicStatusNotification)
-            .setContentIntent(openAppPI)
-            .addAction(0, "⚡ +15m", extendPI)
-            .addAction(0, "Open $appName", openAppPI)
-            .addAction(0, "End Parking", endSessionPI)
+            .setContentIntent(targetAppPI)
+            .addAction(0, "+15m", extend15PI)
+            .addAction(0, "+30m", extend30PI)
+            .addAction(0, "Open App", openAppPI)
+            .addAction(0, "End Session", endSessionPI)
 
         notificationManager.notify(NOTIFICATION_ID_STATUS, builder.build())
     }

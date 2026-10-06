@@ -129,6 +129,41 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
 
     val isAlarmPlaying: StateFlow<Boolean> = com.parktimedetector.audio.AlarmSoundManager.isPlaying
 
+    val syncCalendarEnabled: StateFlow<Boolean> = prefsRepo.syncCalendarEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val selectedCalendarId: StateFlow<Long?> = prefsRepo.selectedCalendarId
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val selectedCalendarName: StateFlow<String?> = prefsRepo.selectedCalendarName
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _availableCalendars = kotlinx.coroutines.flow.MutableStateFlow<List<com.parktimedetector.calendar.CalendarInfo>>(emptyList())
+    val availableCalendars: StateFlow<List<com.parktimedetector.calendar.CalendarInfo>> = _availableCalendars
+
+    fun refreshAvailableCalendars() {
+        viewModelScope.launch {
+            _availableCalendars.value = com.parktimedetector.calendar.CalendarSyncManager.getAvailableCalendars(getApplication())
+        }
+    }
+
+    fun toggleSyncCalendar(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setSyncCalendarEnabled(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Calendar sync enabled: $enabled")
+            if (enabled) {
+                refreshAvailableCalendars()
+            }
+        }
+    }
+
+    fun selectCalendar(calendarId: Long?, calendarName: String?) {
+        viewModelScope.launch {
+            prefsRepo.setSelectedCalendar(calendarId, calendarName)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Selected calendar: $calendarName (ID: $calendarId)")
+        }
+    }
+
     fun setThemeMode(mode: com.parktimedetector.data.AppThemeMode) {
         viewModelScope.launch {
             prefsRepo.setThemeMode(mode)
@@ -542,8 +577,18 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
                 )
             }
 
-            ParkingAlarmScheduler.scheduleAlarms(getApplication(), savedSession)
-            NotificationHelper.showActiveCountdownNotification(getApplication(), savedSession)
+            // Sync with Google/Device Calendar if enabled
+            val eventId = com.parktimedetector.calendar.CalendarSyncManager.createParkingEvent(getApplication(), savedSession)
+            val finalSession = if (eventId != null) {
+                dao.updateCalendarEventId(id, eventId)
+                savedSession.copy(calendarEventId = eventId)
+            } else {
+                savedSession
+            }
+
+            ParkingAlarmScheduler.scheduleAlarms(getApplication(), finalSession)
+            NotificationHelper.showActiveCountdownNotification(getApplication(), finalSession)
+            com.parktimedetector.widget.ParkingWidgetManager.updateAll(getApplication())
         }
     }
 
@@ -565,6 +610,11 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             NotificationHelper.cancelCriticalWarningNotification(getApplication())
             NotificationHelper.cancelAdvanceWarningNotification(getApplication())
             NotificationHelper.cancelWalkBufferNotification(getApplication())
+
+            if (current.calendarEventId != null) {
+                com.parktimedetector.calendar.CalendarSyncManager.updateEventEndTime(getApplication(), current.calendarEventId, newEndTime)
+            }
+            com.parktimedetector.widget.ParkingWidgetManager.updateAll(getApplication())
         }
     }
 
@@ -586,6 +636,11 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             NotificationHelper.cancelCriticalWarningNotification(getApplication())
             NotificationHelper.cancelAdvanceWarningNotification(getApplication())
             NotificationHelper.cancelWalkBufferNotification(getApplication())
+
+            if (current.calendarEventId != null) {
+                com.parktimedetector.calendar.CalendarSyncManager.updateEventEndTime(getApplication(), current.calendarEventId, targetEndTimeMillis)
+            }
+            com.parktimedetector.widget.ParkingWidgetManager.updateAll(getApplication())
         }
     }
 
@@ -745,8 +800,12 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             if (current != null) {
                 ParkingAlarmScheduler.cancelAlarms(getApplication(), current.id)
                 NotificationHelper.cancelStatusNotification(getApplication())
+                if (current.calendarEventId != null) {
+                    com.parktimedetector.calendar.CalendarSyncManager.truncateEventToStop(getApplication(), current.calendarEventId, System.currentTimeMillis())
+                }
             }
             dao.clearAll()
+            com.parktimedetector.widget.ParkingWidgetManager.updateAll(getApplication())
         }
     }
 

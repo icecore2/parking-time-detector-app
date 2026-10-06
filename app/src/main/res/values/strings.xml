@@ -7,4 +7,6 @@
     <string name="channel_status_desc">Ongoing countdown notification for active parking session</string>
     <string name="accessibility_service_name">Parking Screen Detector</string>
     <string name="accessibility_service_desc">Inspects on-screen UI text when MyParking or ParkedIn is open to automatically detect active parking sessions and end times when notifications are unavailable.</string>
+    <string name="widget_title">Parking Status</string>
+    <string name="widget_description">Shows active parking countdown, active zone, and quick extend actions</string>
 </resources>

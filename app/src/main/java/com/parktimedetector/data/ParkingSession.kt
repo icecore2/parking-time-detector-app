@@ -30,7 +30,8 @@ data class ParkingSession(
     val parkedLatitude: Double? = null,
     val parkedLongitude: Double? = null,
     val walkingBufferMinutes: Int = 0,
-    val isNotifiedWalkBuffer: Boolean = false
+    val isNotifiedWalkBuffer: Boolean = false,
+    val calendarEventId: Long? = null
 ) {
     val displayLocation: String
         get() = when {

@@ -160,8 +160,17 @@ object DetectionApprovalManager {
         val newId = dao.insert(newSession)
         val savedSession = newSession.copy(id = newId)
 
-        ParkingAlarmScheduler.scheduleAlarms(context, savedSession)
-        NotificationHelper.showActiveCountdownNotification(context, savedSession)
+        val eventId = com.parktimedetector.calendar.CalendarSyncManager.createParkingEvent(context, savedSession)
+        val finalSession = if (eventId != null) {
+            dao.updateCalendarEventId(newId, eventId)
+            savedSession.copy(calendarEventId = eventId)
+        } else {
+            savedSession
+        }
+
+        ParkingAlarmScheduler.scheduleAlarms(context, finalSession)
+        NotificationHelper.showActiveCountdownNotification(context, finalSession)
+        com.parktimedetector.widget.ParkingWidgetManager.updateAll(context)
     }
 
     fun requestStopApproval(context: Context, stopDetection: com.parktimedetector.data.PendingParkingStopDetection) {
@@ -234,6 +243,10 @@ object DetectionApprovalManager {
                     ParkingAlarmScheduler.cancelAlarms(context, activeSession.id)
                     NotificationHelper.cancelStatusNotification(context)
 
+                    if (activeSession.calendarEventId != null) {
+                        com.parktimedetector.calendar.CalendarSyncManager.truncateEventToStop(context, activeSession.calendarEventId, stopDetection.stopTimeMillis)
+                    }
+
                     val stoppedSession = activeSession.copy(
                         isActive = false,
                         actualStopTimeMillis = stopDetection.stopTimeMillis,
@@ -242,6 +255,7 @@ object DetectionApprovalManager {
                         stopReason = stopReason
                     )
                     _recentlyStoppedSession.value = stoppedSession
+                    com.parktimedetector.widget.ParkingWidgetManager.updateAll(context)
                 } else {
                     // Even if no active session in DB, record a stopped session record
                     val newStopped = ParkingSession(

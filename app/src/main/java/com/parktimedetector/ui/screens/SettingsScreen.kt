@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.LightMode
@@ -60,6 +61,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -107,19 +109,45 @@ fun SettingsScreen(
     var hasListenerPermission by remember { mutableStateOf(ParkingNotificationListenerService.isPermissionGranted(context)) }
     var hasAccessibilityPermission by remember { mutableStateOf(com.parktimedetector.service.ParkingAccessibilityService.isAccessibilityServiceEnabled(context)) }
     var hasExactAlarmPermission by remember { mutableStateOf(ParkingAlarmScheduler.canScheduleExactAlarms(context)) }
+    var hasCalendarPermission by remember { mutableStateOf(com.parktimedetector.calendar.CalendarSyncManager.hasPermissions(context)) }
+
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions[android.Manifest.permission.READ_CALENDAR] == true &&
+                permissions[android.Manifest.permission.WRITE_CALENDAR] == true
+        hasCalendarPermission = granted
+        if (granted) {
+            viewModel.refreshAvailableCalendars()
+            Toast.makeText(context, "Calendar access granted", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Calendar permission not granted", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
             hasListenerPermission = ParkingNotificationListenerService.isPermissionGranted(context)
             hasAccessibilityPermission = com.parktimedetector.service.ParkingAccessibilityService.isAccessibilityServiceEnabled(context)
             hasExactAlarmPermission = ParkingAlarmScheduler.canScheduleExactAlarms(context)
+            hasCalendarPermission = com.parktimedetector.calendar.CalendarSyncManager.hasPermissions(context)
             delay(2000)
+        }
+    }
+
+    LaunchedEffect(hasCalendarPermission) {
+        if (hasCalendarPermission) {
+            viewModel.refreshAvailableCalendars()
         }
     }
 
     val currentThemeMode by viewModel.themeMode.collectAsState()
     val walkingBufferMinutes by viewModel.walkingBufferMinutes.collectAsState()
     val favoriteZones by viewModel.favoriteZones.collectAsState()
+    val calendarSyncEnabled by viewModel.syncCalendarEnabled.collectAsState()
+    val selectedCalendarId by viewModel.selectedCalendarId.collectAsState()
+    val selectedCalendarName by viewModel.selectedCalendarName.collectAsState()
+    val availableCalendars by viewModel.availableCalendars.collectAsState()
 
     var showAddZoneDialog by remember { mutableStateOf(false) }
     var newZoneName by remember { mutableStateOf("") }
@@ -418,6 +446,176 @@ fun SettingsScreen(
                                         Icon(Icons.Default.Delete, contentDescription = "Remove", tint = RoseRed, modifier = Modifier.size(18.dp))
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Calendar Synchronization Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.DateRange,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Calendar Synchronization",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = calendarSyncEnabled,
+                        onCheckedChange = { enabled ->
+                            if (enabled && !hasCalendarPermission) {
+                                calendarPermissionLauncher.launch(
+                                    arrayOf(
+                                        android.Manifest.permission.READ_CALENDAR,
+                                        android.Manifest.permission.WRITE_CALENDAR
+                                    )
+                                )
+                            }
+                            viewModel.toggleSyncCalendar(enabled)
+                        }
+                    )
+                }
+
+                Text(
+                    text = "Automatically create events in Google or Device Calendar blocking out your parking session time with BUSY availability to prevent overlapping meeting schedules.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                if (calendarSyncEnabled) {
+                    if (!hasCalendarPermission) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = RoseRed.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, RoseRed.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = RoseRed)
+                                Text(
+                                    "Calendar permission required to create events.",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        calendarPermissionLauncher.launch(
+                                            arrayOf(
+                                                android.Manifest.permission.READ_CALENDAR,
+                                                android.Manifest.permission.WRITE_CALENDAR
+                                            )
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Grant", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    } else {
+                        // Calendar selection list
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "Target Calendar:",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.SemiBold
+                            )
+
+                            if (availableCalendars.isEmpty()) {
+                                Text(
+                                    "No device calendars discovered or querying...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            } else {
+                                availableCalendars.forEach { cal ->
+                                    val isSelected = (selectedCalendarId == cal.id) ||
+                                            (selectedCalendarId == null && cal.isPrimary)
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            1.dp,
+                                            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.selectCalendar(cal.id, cal.displayName)
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = cal.displayName + if (cal.isPrimary) " (Primary)" else "",
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = MaterialTheme.colorScheme.onSurface,
+                                                    fontSize = 14.sp
+                                                )
+                                                if (cal.accountName.isNotBlank()) {
+                                                    Text(
+                                                        text = cal.accountName,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 12.sp
+                                                    )
+                                                }
+                                            }
+                                            if (isSelected) {
+                                                Icon(
+                                                    Icons.Default.CheckCircle,
+                                                    contentDescription = "Selected",
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = EmeraldGreen.copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldGreen)
+                                Text(
+                                    "Active sessions will automatically block your calendar schedule and adjust if extended.",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp
+                                )
                             }
                         }
                     }
@@ -1745,6 +1943,21 @@ fun SettingsScreen(
                         }
                     )
                 }
+
+                // Calendar Access (Optional)
+                PermissionRow(
+                    title = "Calendar Access (Optional)",
+                    description = "Required to sync parking sessions to your Google or device calendar as busy slots",
+                    isGranted = hasCalendarPermission,
+                    onOpenSettings = {
+                        calendarPermissionLauncher.launch(
+                            arrayOf(
+                                android.Manifest.permission.READ_CALENDAR,
+                                android.Manifest.permission.WRITE_CALENDAR
+                            )
+                        )
+                    }
+                )
             }
         }
 

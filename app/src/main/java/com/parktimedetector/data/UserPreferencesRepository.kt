@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -75,6 +76,9 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_PERSISTENT_VIBRATION_ENABLED = booleanPreferencesKey("persistent_vibration_enabled")
         val KEY_VIBRATION_PATTERN_TYPE = stringPreferencesKey("vibration_pattern_type")
         val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
+        val KEY_SYNC_CALENDAR_ENABLED = booleanPreferencesKey("sync_calendar_enabled")
+        val KEY_SELECTED_CALENDAR_ID = longPreferencesKey("selected_calendar_id")
+        val KEY_SELECTED_CALENDAR_NAME = stringPreferencesKey("selected_calendar_name")
 
         const val DEFAULT_ADVANCE_MINUTES = 15
         const val DEFAULT_CRITICAL_MINUTES = 2
@@ -385,6 +389,39 @@ class UserPreferencesRepository(private val context: Context) {
             val current = FavoriteZone.listFromJsonString(preferences[KEY_FAVORITE_ZONES])
             val updated = current.filterNot { it.id == zoneId }
             preferences[KEY_FAVORITE_ZONES] = FavoriteZone.listToJsonString(updated)
+        }
+    }
+
+    val syncCalendarEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SYNC_CALENDAR_ENABLED] ?: false
+    }
+
+    val selectedCalendarId: Flow<Long?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SELECTED_CALENDAR_ID]
+    }
+
+    val selectedCalendarName: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_SELECTED_CALENDAR_NAME]
+    }
+
+    suspend fun setSyncCalendarEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_SYNC_CALENDAR_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setSelectedCalendar(calendarId: Long?, calendarName: String?) {
+        context.dataStore.edit { preferences ->
+            if (calendarId != null) {
+                preferences[KEY_SELECTED_CALENDAR_ID] = calendarId
+            } else {
+                preferences.remove(KEY_SELECTED_CALENDAR_ID)
+            }
+            if (calendarName != null) {
+                preferences[KEY_SELECTED_CALENDAR_NAME] = calendarName
+            } else {
+                preferences.remove(KEY_SELECTED_CALENDAR_NAME)
+            }
         }
     }
 }

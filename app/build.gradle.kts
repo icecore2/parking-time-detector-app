@@ -102,6 +102,10 @@ dependencies {
     // Networking
     implementation(libs.okhttp)
 
+    // Jetpack Glance AppWidgets
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

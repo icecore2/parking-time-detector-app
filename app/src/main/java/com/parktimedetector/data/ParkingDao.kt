@@ -46,6 +46,9 @@ interface ParkingDao {
     @Query("UPDATE parking_sessions SET parkedLatitude = :lat, parkedLongitude = :lng WHERE id = :id")
     suspend fun updateParkedCoordinates(id: Long, lat: Double?, lng: Double?)
 
+    @Query("UPDATE parking_sessions SET calendarEventId = :eventId WHERE id = :id")
+    suspend fun updateCalendarEventId(id: Long, eventId: Long?)
+
     @Query("SELECT * FROM parking_sessions WHERE parkedLatitude IS NOT NULL AND parkedLongitude IS NOT NULL ORDER BY startTimeMillis DESC LIMIT 50")
     suspend fun getSessionsWithCoordinates(): List<ParkingSession>
 
