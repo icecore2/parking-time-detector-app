@@ -108,6 +108,12 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
     private var lastExtractedHash: Int = 0
     private var lastDetectedEndTime: Long = 0L
     private var overlayView: View? = null
+    private var isBubbleMode = false
+    private var isStopOverlay = false
+    private var currentOverlayParams: WindowManager.LayoutParams? = null
+    private var lastDetectedZone: String? = null
+    private var lastDetectedDuration: String? = null
+    private var lastDetectedCost: String? = null
     private var cachedQuickRenewEnabled = true
     private var cachedPauseBeforePayment = true
 
@@ -118,6 +124,9 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
     private var userConfirmedStartInDialog = false
     private var userInitiatedStopAttempt = false
     private var lastForegroundActivity: String? = null
+
+    override fun isBubbleCollapsed(): Boolean = isBubbleMode && overlayView != null
+
 
     private fun dpToPx(dp: Int): Int {
         return (dp * resources.displayMetrics.density).toInt()
@@ -527,10 +536,12 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
             // Check if start session requires confirmation dialog interaction (e.g. MyParking app)
             if (isMyParkingApp) {
                 val isExplicitActiveDashboard = SessionNotificationParser.isStartEndActiveSessionScreen(texts)
+                val isDetectionOrBubbleActive = DetectionApprovalManager.pendingDetection.value != null || isBubbleMode || overlayView != null
                 val hasRecentDialog = userConfirmedStartInDialog ||
                     (isStartConfirmationDialogActive && (now - lastStartConfirmationDialogTime < 30_000L)) ||
                     (now - lastStartConfirmationDialogTime < 15_000L) ||
-                    isExplicitActiveDashboard
+                    isExplicitActiveDashboard ||
+                    isDetectionOrBubbleActive
 
                 if (!hasRecentDialog) {
                     AppLogger.info(
@@ -544,15 +555,25 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 }
             }
 
-            // Reset dialog confirmation flag
-            userConfirmedStartInDialog = false
-            isStartConfirmationDialogActive = false
+            // Reset dialog confirmation flag only if not tracking an active overlay or bubble
+            if (!isBubbleMode && overlayView == null) {
+                userConfirmedStartInDialog = false
+                isStartConfirmationDialogActive = false
+            }
 
-            // Avoid re-triggering if exact same end time was already detected within 60s
-            if (Math.abs(parsedResult.endTimeMillis - lastDetectedEndTime) < 60_000L) {
+            // Deduplication: Avoid re-triggering only if the exact same detection (same end time, same zone, same duration, same cost)
+            val isExactSameDetection = Math.abs(parsedResult.endTimeMillis - lastDetectedEndTime) < 60_000L &&
+                parsedResult.zoneOrLot == lastDetectedZone &&
+                parsedResult.purchasedDurationText == lastDetectedDuration &&
+                parsedResult.costText == lastDetectedCost
+
+            if (isExactSameDetection) {
                 return
             }
             lastDetectedEndTime = parsedResult.endTimeMillis
+            lastDetectedZone = parsedResult.zoneOrLot
+            lastDetectedDuration = parsedResult.purchasedDurationText
+            lastDetectedCost = parsedResult.costText
 
             val timeFormat = SimpleDateFormat("h:mm:ss a", Locale.getDefault())
             val formattedEnd = timeFormat.format(Date(parsedResult.endTimeMillis))
@@ -700,6 +721,100 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
         }
     }
 
+    private fun updateDetectionDataInViews(
+        view: View,
+        detection: PendingParkingDetection,
+        shouldRedact: Boolean
+    ) {
+        val tvBubbleLot = view.findViewById<TextView>(R.id.tv_overlay_bubble_lot)
+        val tvBubbleTime = view.findViewById<TextView>(R.id.tv_overlay_bubble_time)
+
+        val tvBadge = view.findViewById<TextView>(R.id.tv_overlay_badge_text)
+        val tvPrimaryText = view.findViewById<TextView>(R.id.tv_overlay_primary_text)
+        val tvSecondaryText = view.findViewById<TextView>(R.id.tv_overlay_secondary_text)
+        val tvSuggestionText = view.findViewById<TextView>(R.id.tv_overlay_suggestion_text)
+
+        val tvDetailLocation = view.findViewById<TextView>(R.id.tv_overlay_detail_location)
+        val tvDetailExpiry = view.findViewById<TextView>(R.id.tv_overlay_detail_expiry)
+        val tvDetailDuration = view.findViewById<TextView>(R.id.tv_overlay_detail_duration)
+        val tvDetailSource = view.findViewById<TextView>(R.id.tv_overlay_detail_source)
+
+        val locationText = if (shouldRedact) OverlayPrivacyManager.getRedactedLocation() else (detection.zoneOrLot ?: "Parking Session Active")
+        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+        val startMillis = detection.startTimeMillis
+        val formattedStart = timeFormat.format(Date(startMillis))
+        val formattedEnd = timeFormat.format(Date(detection.endTimeMillis))
+        val durationStr = if (detection.durationMinutes >= 60) {
+            val hrs = detection.durationMinutes / 60
+            val mins = detection.durationMinutes % 60
+            if (mins > 0) "${hrs}h ${mins}m" else "${hrs}h"
+        } else {
+            "${detection.durationMinutes}m"
+        }
+
+        // 1. Update data visible inside the bubble
+        tvBubbleLot?.text = if (shouldRedact) "Parking" else (detection.zoneOrLot?.substringBefore(" -") ?: "Parking")
+        tvBubbleTime?.text = formattedEnd
+
+        // 2. Update data inside the dialog card
+        tvBadge?.text = "${detection.appName.uppercase()} DETECTED"
+        tvPrimaryText?.text = locationText
+        tvSecondaryText?.text = "Ends $formattedEnd • ~$durationStr duration"
+
+        val zoneText = if (!detection.zoneOrLot.isNullOrBlank() && !shouldRedact) " (${detection.zoneOrLot})" else ""
+        tvSuggestionText?.text = "Session detected: $formattedStart – $formattedEnd (~$durationStr)$zoneText. Start timer now to track remaining time and receive renewal alerts?"
+
+        tvDetailLocation?.text = if (shouldRedact) OverlayPrivacyManager.getRedactedLocation() else "Location: ${detection.zoneOrLot ?: "Not specified"}"
+        tvDetailExpiry?.text = "Expires: $formattedEnd"
+        tvDetailDuration?.text = "Duration: ~${detection.durationMinutes} mins ($durationStr)"
+        tvDetailSource?.text = "Source: ${detection.source}"
+    }
+
+    private fun updateStopDetectionDataInViews(
+        view: View,
+        detection: com.parktimedetector.data.PendingParkingStopDetection,
+        shouldRedact: Boolean
+    ) {
+        val tvBubbleLot = view.findViewById<TextView>(R.id.tv_overlay_stop_bubble_lot)
+        val tvBubbleTime = view.findViewById<TextView>(R.id.tv_overlay_stop_bubble_time)
+
+        val tvBadge = view.findViewById<TextView>(R.id.tv_overlay_stop_badge_text)
+        val tvPrimaryText = view.findViewById<TextView>(R.id.tv_overlay_stop_primary_text)
+        val tvSecondaryText = view.findViewById<TextView>(R.id.tv_overlay_stop_secondary_text)
+        val tvSuggestionText = view.findViewById<TextView>(R.id.tv_overlay_stop_suggestion_text)
+
+        val tvDetailLocation = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_location)
+        val tvDetailTime = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_time)
+        val tvDetailDuration = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_duration)
+        val tvDetailCost = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_cost)
+        val tvDetailSource = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_source)
+
+        val locationText = if (shouldRedact) OverlayPrivacyManager.getRedactedStopLocation() else (detection.zoneOrLot ?: "Parking Stopped")
+        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+        val formattedStop = timeFormat.format(Date(detection.stopTimeMillis))
+        val durationStr = detection.durationParkedText?.let { " • $it" } ?: ""
+        val costStr = if (shouldRedact) " • " + OverlayPrivacyManager.getRedactedCost() else (detection.costOrRefundText?.let { " • $it" } ?: "")
+
+        // 1. Update data visible inside the stop bubble
+        tvBubbleLot?.text = if (shouldRedact) "Stopped" else (detection.zoneOrLot?.substringBefore(" -") ?: "Stopped")
+        tvBubbleTime?.text = formattedStop
+
+        // 2. Update data inside the dialog card
+        tvBadge?.text = "${detection.appName.uppercase()} STOPPED"
+        tvPrimaryText?.text = locationText
+        tvSecondaryText?.text = "Stopped at $formattedStop$durationStr$costStr"
+
+        val stopDurationDetail = detection.durationParkedText?.let { " ($it parked)" } ?: ""
+        val stopCostDetail = if (shouldRedact) "" else (detection.costOrRefundText?.let { " • $it" } ?: "")
+        tvSuggestionText?.text = "Parking stop detected at $formattedStop$stopDurationDetail$stopCostDetail. End active timer and record session summary?"
+
+        tvDetailLocation?.text = if (shouldRedact) OverlayPrivacyManager.getRedactedStopLocation() else "Location: ${detection.zoneOrLot ?: "Not specified"}"
+        tvDetailTime?.text = "Stopped At: $formattedStop"
+        tvDetailDuration?.text = "Time Parked: ${detection.durationParkedText ?: "Recorded at stop"}"
+        tvDetailCost?.text = if (shouldRedact) "Total Cost / Refund: ${OverlayPrivacyManager.getRedactedCost()}" else "Total Cost / Refund: ${detection.costOrRefundText ?: "N/A"}"
+        tvDetailSource?.text = "Source: ${detection.source}"
+    }
+
     override fun showOverlay(detection: PendingParkingDetection) {
         serviceScope.launch {
             try {
@@ -719,9 +834,36 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                 mainHandler.post {
                     try {
-                        hideOverlayInternal()
-
                         val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return@post
+
+                        // If overlay is already active and bubble is collapsed, DO NOT RAISE DIALOG!
+                        // Update the data about the parking selected inside the bubble until open.
+                        if (overlayView != null && isBubbleMode && !isStopOverlay) {
+                            updateDetectionDataInViews(overlayView!!, detection, shouldRedact)
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_DATA_UPDATED",
+                                message = "[FLOW: BUBBLE] Updated selected parking inside collapsed bubble: ${detection.zoneOrLot ?: "Active"}",
+                                packageName = detection.packageName
+                            )
+                            return@post
+                        }
+
+                        // If overlay is already active in open dialog mode, smoothly update in-place
+                        if (overlayView != null && !isBubbleMode && !isStopOverlay) {
+                            updateDetectionDataInViews(overlayView!!, detection, shouldRedact)
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "DIALOG_DATA_UPDATED",
+                                message = "[FLOW: DIALOG] Updated selected parking inside open dialog: ${detection.zoneOrLot ?: "Active"}",
+                                packageName = detection.packageName
+                            )
+                            return@post
+                        }
+
+                        hideOverlayInternal()
+                        isStopOverlay = false
+
                         val inflater = LayoutInflater.from(this@ParkingAccessibilityService)
                         val view = inflater.inflate(R.layout.dialog_parking_detection_overlay, null)
 
@@ -729,49 +871,15 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                         val layoutBubble = view.findViewById<View>(R.id.layout_overlay_bubble)
                         val viewDragHandle = view.findViewById<View>(R.id.view_overlay_drag_handle)
                         val btnMinimize = view.findViewById<TextView>(R.id.btn_overlay_minimize)
-                        val tvSuggestionText = view.findViewById<TextView>(R.id.tv_overlay_suggestion_text)
-
                         val layoutHeader = view.findViewById<android.widget.LinearLayout>(R.id.layout_overlay_header)
                         val layoutDetails = view.findViewById<android.widget.LinearLayout>(R.id.layout_overlay_details)
-                        val tvBadge = view.findViewById<TextView>(R.id.tv_overlay_badge_text)
-                        val tvPrimaryText = view.findViewById<TextView>(R.id.tv_overlay_primary_text)
-                        val tvSecondaryText = view.findViewById<TextView>(R.id.tv_overlay_secondary_text)
                         val btnQuickStart = view.findViewById<Button>(R.id.btn_overlay_quick_start)
                         val btnExpand = view.findViewById<TextView>(R.id.btn_overlay_expand)
                         val btnClose = view.findViewById<TextView>(R.id.btn_overlay_close)
-
-                        val tvDetailLocation = view.findViewById<TextView>(R.id.tv_overlay_detail_location)
-                        val tvDetailExpiry = view.findViewById<TextView>(R.id.tv_overlay_detail_expiry)
-                        val tvDetailDuration = view.findViewById<TextView>(R.id.tv_overlay_detail_duration)
-                        val tvDetailSource = view.findViewById<TextView>(R.id.tv_overlay_detail_source)
                         val btnStart = view.findViewById<Button>(R.id.btn_overlay_start)
                         val btnDismiss = view.findViewById<Button>(R.id.btn_overlay_dismiss)
 
-                        tvBadge?.text = "${detection.appName.uppercase()} DETECTED"
-
-                        val locationText = if (shouldRedact) OverlayPrivacyManager.getRedactedLocation() else (detection.zoneOrLot ?: "Parking Session Active")
-                        tvPrimaryText.text = locationText
-
-                        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-                        val startMillis = detection.startTimeMillis
-                        val formattedStart = timeFormat.format(Date(startMillis))
-                        val formattedEnd = timeFormat.format(Date(detection.endTimeMillis))
-                        val durationStr = if (detection.durationMinutes >= 60) {
-                            val hrs = detection.durationMinutes / 60
-                            val mins = detection.durationMinutes % 60
-                            if (mins > 0) "${hrs}h ${mins}m" else "${hrs}h"
-                        } else {
-                            "${detection.durationMinutes}m"
-                        }
-                        tvSecondaryText.text = "Ends $formattedEnd • ~$durationStr duration"
-
-                        val zoneText = if (!detection.zoneOrLot.isNullOrBlank() && !shouldRedact) " (${detection.zoneOrLot})" else ""
-                        tvSuggestionText?.text = "Session detected: $formattedStart – $formattedEnd (~$durationStr)$zoneText. Start timer now to track remaining time and receive renewal alerts?"
-
-                        tvDetailLocation.text = if (shouldRedact) OverlayPrivacyManager.getRedactedLocation() else "Location: ${detection.zoneOrLot ?: "Not specified"}"
-                        tvDetailExpiry.text = "Expires: $formattedEnd"
-                        tvDetailDuration.text = "Duration: ~${detection.durationMinutes} mins ($durationStr)"
-                        tvDetailSource.text = "Source: ${detection.source}"
+                        updateDetectionDataInViews(view, detection, shouldRedact)
 
                         var isExpanded = false
                         val toggleExpand = {
@@ -816,6 +924,7 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                                 dpToPx(48)
                             }
                         }
+                        currentOverlayParams = params
 
                         // Make dialog card draggable via drag handle and header
                         if (viewDragHandle != null) {
@@ -827,26 +936,40 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         // Minimize to bubble mode
                         btnMinimize?.setOnClickListener {
+                            isBubbleMode = true
                             layoutCard?.visibility = View.GONE
                             layoutBubble?.visibility = View.VISIBLE
-                            params.width = dpToPx(60)
-                            params.height = dpToPx(60)
-                            params.x = (screenWidth - dpToPx(76)).coerceAtLeast(0)
+                            params.width = dpToPx(76)
+                            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                            params.x = (screenWidth - dpToPx(88)).coerceAtLeast(0)
+                            currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_COLLAPSED",
+                                message = "[FLOW: BUBBLE] Detection dialog minimized to bubble"
+                            )
                         }
 
                         // Expand from bubble mode
                         val expandFromBubble = {
+                            isBubbleMode = false
                             layoutBubble?.visibility = View.GONE
                             layoutCard?.visibility = View.VISIBLE
                             params.width = cardWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - cardWidth) / 2
+                            currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_EXPANDED",
+                                message = "[FLOW: BUBBLE] Bubble expanded to detection dialog"
+                            )
                         }
 
                         if (layoutBubble != null) {
@@ -884,9 +1007,40 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                 mainHandler.post {
                     try {
-                        hideOverlayInternal()
-
                         val wm = getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return@post
+
+                        // If overlay already exists and bubble is collapsed, DO NOT RAISE DIALOG!
+                        if (overlayView != null && isBubbleMode && isStopOverlay) {
+                            updateStopDetectionDataInViews(overlayView!!, detection, shouldRedact)
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_STOP_UPDATED",
+                                message = "[FLOW: BUBBLE] Updated stop detection inside collapsed bubble: ${detection.zoneOrLot ?: "Stopped"}",
+                                packageName = detection.packageName
+                            )
+                            return@post
+                        }
+
+                        // If overlay is already active in open dialog mode, smoothly update in-place
+                        if (overlayView != null && !isBubbleMode && isStopOverlay) {
+                            updateStopDetectionDataInViews(overlayView!!, detection, shouldRedact)
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "DIALOG_STOP_UPDATED",
+                                message = "[FLOW: DIALOG] Updated stop detection inside open dialog: ${detection.zoneOrLot ?: "Stopped"}",
+                                packageName = detection.packageName
+                            )
+                            return@post
+                        }
+
+                        val previousX = currentOverlayParams?.x
+                        val previousY = currentOverlayParams?.y
+                        val wasInBubbleMode = isBubbleMode
+
+                        hideOverlayInternal()
+                        isStopOverlay = true
+                        isBubbleMode = wasInBubbleMode
+
                         val inflater = LayoutInflater.from(this@ParkingAccessibilityService)
                         val view = inflater.inflate(R.layout.dialog_parking_stop_overlay, null)
 
@@ -894,46 +1048,15 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                         val layoutBubble = view.findViewById<View>(R.id.layout_overlay_stop_bubble)
                         val viewDragHandle = view.findViewById<View>(R.id.view_overlay_stop_drag_handle)
                         val btnMinimize = view.findViewById<TextView>(R.id.btn_overlay_stop_minimize)
-                        val tvSuggestionText = view.findViewById<TextView>(R.id.tv_overlay_stop_suggestion_text)
-
                         val layoutHeader = view.findViewById<android.widget.LinearLayout>(R.id.layout_overlay_stop_header)
                         val layoutDetails = view.findViewById<android.widget.LinearLayout>(R.id.layout_overlay_stop_details)
-                        val tvBadge = view.findViewById<TextView>(R.id.tv_overlay_stop_badge_text)
-                        val tvPrimaryText = view.findViewById<TextView>(R.id.tv_overlay_stop_primary_text)
-                        val tvSecondaryText = view.findViewById<TextView>(R.id.tv_overlay_stop_secondary_text)
                         val btnQuickAccept = view.findViewById<Button>(R.id.btn_overlay_stop_quick_accept)
                         val btnExpand = view.findViewById<TextView>(R.id.btn_overlay_stop_expand)
                         val btnClose = view.findViewById<TextView>(R.id.btn_overlay_stop_close)
-
-                        val tvDetailLocation = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_location)
-                        val tvDetailTime = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_time)
-                        val tvDetailDuration = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_duration)
-                        val tvDetailCost = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_cost)
-                        val tvDetailSource = view.findViewById<TextView>(R.id.tv_overlay_stop_detail_source)
                         val btnAccept = view.findViewById<Button>(R.id.btn_overlay_stop_accept)
                         val btnDismiss = view.findViewById<Button>(R.id.btn_overlay_stop_dismiss)
 
-                        tvBadge?.text = "${detection.appName.uppercase()} STOPPED"
-
-                        val locationText = if (shouldRedact) OverlayPrivacyManager.getRedactedStopLocation() else (detection.zoneOrLot ?: "Parking Stopped")
-                        tvPrimaryText.text = locationText
-
-                        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
-                        val formattedStop = timeFormat.format(Date(detection.stopTimeMillis))
-                        val durationStr = detection.durationParkedText?.let { " • $it" } ?: ""
-                        val costStr = if (shouldRedact) " • " + OverlayPrivacyManager.getRedactedCost() else (detection.costOrRefundText?.let { " • $it" } ?: "")
-
-                        tvSecondaryText.text = "Stopped at $formattedStop$durationStr$costStr"
-
-                        val stopDurationDetail = detection.durationParkedText?.let { " ($it parked)" } ?: ""
-                        val stopCostDetail = if (shouldRedact) "" else (detection.costOrRefundText?.let { " • $it" } ?: "")
-                        tvSuggestionText?.text = "Parking stop detected at $formattedStop$stopDurationDetail$stopCostDetail. End active timer and record session summary?"
-
-                        tvDetailLocation.text = if (shouldRedact) OverlayPrivacyManager.getRedactedStopLocation() else "Location: ${detection.zoneOrLot ?: "Not specified"}"
-                        tvDetailTime.text = "Stopped At: $formattedStop"
-                        tvDetailDuration.text = "Time Parked: ${detection.durationParkedText ?: "Recorded at stop"}"
-                        tvDetailCost.text = if (shouldRedact) "Total Cost / Refund: ${OverlayPrivacyManager.getRedactedCost()}" else "Total Cost / Refund: ${detection.costOrRefundText ?: "N/A"}"
-                        tvDetailSource.text = "Source: ${detection.source}"
+                        updateStopDetectionDataInViews(view, detection, shouldRedact)
 
                         var isExpanded = false
                         val toggleExpand = {
@@ -964,19 +1087,28 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                         val cardWidth = Math.min(screenWidth - dpToPx(32), dpToPx(380))
 
                         val params = WindowManager.LayoutParams(
-                            cardWidth,
+                            if (wasInBubbleMode) dpToPx(76) else cardWidth,
                             WindowManager.LayoutParams.WRAP_CONTENT,
                             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                             PixelFormat.TRANSLUCENT
                         ).apply {
                             gravity = Gravity.TOP or Gravity.START
-                            x = (screenWidth - cardWidth) / 2
-                            y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                            x = previousX ?: if (wasInBubbleMode) (screenWidth - dpToPx(88)).coerceAtLeast(0) else (screenWidth - cardWidth) / 2
+                            y = previousY ?: if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
                                 (screenHeight - dpToPx(320)) / 2
                             } else {
                                 dpToPx(48)
                             }
+                        }
+                        currentOverlayParams = params
+
+                        if (wasInBubbleMode) {
+                            layoutCard?.visibility = View.GONE
+                            layoutBubble?.visibility = View.VISIBLE
+                        } else {
+                            layoutCard?.visibility = View.VISIBLE
+                            layoutBubble?.visibility = View.GONE
                         }
 
                         // Make stop dialog card draggable via drag handle and header
@@ -989,11 +1121,13 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         // Minimize to bubble mode
                         btnMinimize?.setOnClickListener {
+                            isBubbleMode = true
                             layoutCard?.visibility = View.GONE
                             layoutBubble?.visibility = View.VISIBLE
-                            params.width = dpToPx(60)
-                            params.height = dpToPx(60)
-                            params.x = (screenWidth - dpToPx(76)).coerceAtLeast(0)
+                            params.width = dpToPx(76)
+                            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+                            params.x = (screenWidth - dpToPx(88)).coerceAtLeast(0)
+                            currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
@@ -1001,11 +1135,13 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         // Expand from bubble mode
                         val expandFromBubble = {
+                            isBubbleMode = false
                             layoutBubble?.visibility = View.GONE
                             layoutCard?.visibility = View.VISIBLE
                             params.width = cardWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - cardWidth) / 2
+                            currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
@@ -1042,6 +1178,10 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error removing accessibility overlay view", e)
+        } finally {
+            isBubbleMode = false
+            isStopOverlay = false
+            currentOverlayParams = null
         }
     }
 

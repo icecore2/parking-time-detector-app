@@ -40,9 +40,13 @@ object DetectionApprovalManager {
         fun showOverlay(detection: PendingParkingDetection)
         fun showStopOverlay(detection: com.parktimedetector.data.PendingParkingStopDetection)
         fun hideOverlay()
+        fun isBubbleCollapsed(): Boolean = false
     }
 
     var overlayCallback: OverlayCallback? = null
+
+    fun isBubbleCollapsed(): Boolean = overlayCallback?.isBubbleCollapsed() == true
+
 
     fun requestApprovalOrStart(context: Context, detection: PendingParkingDetection) {
         scope.launch {

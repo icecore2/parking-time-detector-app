@@ -5,34 +5,70 @@
     android:layout_height="wrap_content">
 
     <!-- Floating Bubble Mode (Collapsible / Expandable) -->
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/layout_overlay_stop_bubble"
-        android:layout_width="60dp"
-        android:layout_height="60dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="66dp"
+        android:minHeight="66dp"
         android:layout_gravity="center"
         android:background="@drawable/bg_overlay_bubble_stop"
         android:elevation="18dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="6dp"
         android:visibility="gone">
 
-        <!-- Center App / Stop Icon -->
-        <ImageView
-            android:id="@+id/iv_overlay_stop_bubble_icon"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_stop_circle"
-            android:tint="@color/rose_red" />
+        <!-- Center App / Stop Icon with Badge Dot -->
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
 
-        <!-- Notification Style Dot (Badge in Top Right Corner) -->
-        <View
-            android:id="@+id/view_overlay_stop_bubble_dot"
-            android:layout_width="14dp"
-            android:layout_height="14dp"
-            android:layout_gravity="top|end"
-            android:layout_marginTop="3dp"
-            android:layout_marginEnd="3dp"
-            android:background="@drawable/bg_notification_dot_red" />
-    </FrameLayout>
+            <ImageView
+                android:id="@+id/iv_overlay_stop_bubble_icon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_stop_circle"
+                android:tint="@color/rose_red" />
+
+            <!-- Notification Style Dot (Badge in Top Right Corner) -->
+            <View
+                android:id="@+id/view_overlay_stop_bubble_dot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:layout_gravity="top|end"
+                android:layout_marginStart="14dp"
+                android:background="@drawable/bg_notification_dot_red" />
+        </FrameLayout>
+
+        <!-- Stopped Parking Lot / Zone Text inside Bubble -->
+        <TextView
+            android:id="@+id/tv_overlay_stop_bubble_lot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:maxWidth="84dp"
+            android:textColor="@color/text_primary"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <!-- Stopped Parking Time / Cost Text inside Bubble -->
+        <TextView
+            android:id="@+id/tv_overlay_stop_bubble_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:maxWidth="84dp"
+            android:textColor="@color/rose_red"
+            android:textSize="9sp"
+            android:gravity="center" />
+    </LinearLayout>
 
     <!-- Expanded Draggable Card Dialog -->
     <LinearLayout
