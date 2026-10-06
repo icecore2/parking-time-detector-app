@@ -105,9 +105,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (com.parktimedetector.audio.AlarmSoundManager.isPlaying.value) {
+            com.parktimedetector.audio.AlarmSoundManager.stop(this)
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (com.parktimedetector.audio.AlarmSoundManager.isPlaying.value) {
+            com.parktimedetector.audio.AlarmSoundManager.stop(this)
+        }
     }
 }
 

@@ -43,6 +43,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import com.parktimedetector.ui.components.ParkingCircularGauge
+import com.parktimedetector.ui.components.ParkingUrgencyState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -338,6 +340,7 @@ fun HomeScreen(
         if (activeSession != null && activeSession.isActive) {
             ActiveSessionCard(
                 session = activeSession,
+                viewModel = viewModel,
                 onOpenApp = { viewModel.openTargetApp(context, activeSession.packageName) },
                 onQuickRenew = { viewModel.launchQuickRenew(context, activeSession) },
                 onExtend = { extraMinutes -> viewModel.extendCurrentSession(extraMinutes) },
@@ -405,12 +408,18 @@ fun PermissionBanner(
 @Composable
 fun ActiveSessionCard(
     session: ParkingSession,
+    viewModel: ParkingViewModel,
     onOpenApp: () -> Unit,
     onQuickRenew: () -> Unit = onOpenApp,
     onExtend: (Int) -> Unit,
     onEndSession: () -> Unit
 ) {
+    val context = LocalContext.current
     var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    val criticalWarningMinutes by viewModel.criticalWarningMinutes.collectAsState()
+    val isAlarmPlaying by viewModel.isAlarmPlaying.collectAsState()
+    val hapticsEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
 
     // Live clock ticker every second
     LaunchedEffect(session.id) {
@@ -423,6 +432,14 @@ fun ActiveSessionCard(
     val remainingMillis = session.remainingMillis(currentTime)
     val isExpired = session.isExpired(currentTime)
     val inAdvanceWarning = session.isInAdvanceWarningZone(currentTime)
+    val isCritical = session.isInCriticalZone(currentTime, criticalWarningMinutes)
+
+    val urgencyState = when {
+        isExpired -> ParkingUrgencyState.EXPIRED
+        isCritical -> ParkingUrgencyState.CRITICAL
+        inAdvanceWarning -> ParkingUrgencyState.WARNING
+        else -> ParkingUrgencyState.SAFE
+    }
 
     val remainingSeconds = (remainingMillis / 1000) % 60
     val remainingMinutes = (remainingMillis / (1000 * 60)) % 60
@@ -437,16 +454,18 @@ fun ActiveSessionCard(
     val totalDuration = session.totalDurationMillis.coerceAtLeast(1L)
     val progress = if (isExpired) 1f else (1f - (remainingMillis.toFloat() / totalDuration)).coerceIn(0f, 1f)
 
-    val statusColor = when {
-        isExpired -> RoseRed
-        inAdvanceWarning -> AmberWarning
-        else -> EmeraldGreen
+    val statusColor = when (urgencyState) {
+        ParkingUrgencyState.EXPIRED -> RoseRed
+        ParkingUrgencyState.CRITICAL -> RoseRed
+        ParkingUrgencyState.WARNING -> AmberWarning
+        ParkingUrgencyState.SAFE -> EmeraldGreen
     }
 
-    val statusText = when {
-        isExpired -> "PARKING EXPIRED"
-        inAdvanceWarning -> "EXPIRING SOON"
-        else -> "ACTIVE SESSION"
+    val statusText = when (urgencyState) {
+        ParkingUrgencyState.EXPIRED -> "PARKING EXPIRED"
+        ParkingUrgencyState.CRITICAL -> "CRITICAL: EXPIRING SOON"
+        ParkingUrgencyState.WARNING -> "EXPIRING SOON"
+        ParkingUrgencyState.SAFE -> "ACTIVE SESSION"
     }
 
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -491,35 +510,36 @@ fun ActiveSessionCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Big Timer Display
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(190.dp)
-            ) {
-                CircularProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier.fillMaxSize(),
-                    strokeWidth = 10.dp,
-                    color = statusColor,
-                    trackColor = SurfaceDark
-                )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = timeString,
-                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp),
-                        fontWeight = FontWeight.ExtraBold,
-                        color = if (isExpired) RoseRed else TextPrimary
-                    )
-                    Text(
-                        text = if (isExpired) "Renew now!" else "Time remaining",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary
-                    )
+            // Stop alarm banner if alarm is ringing
+            if (isAlarmPlaying) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = { viewModel.stopAlarmNow() },
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("⏹ Stop Ringing Alarm", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Enhanced Dynamic Circular Gauge Display with animations
+            ParkingCircularGauge(
+                progress = progress,
+                timeString = timeString,
+                subtitleText = when (urgencyState) {
+                    ParkingUrgencyState.EXPIRED -> "Renew now!"
+                    ParkingUrgencyState.CRITICAL -> "Critical Zone (< ${criticalWarningMinutes}m)!"
+                    ParkingUrgencyState.WARNING -> "Expiring soon"
+                    ParkingUrgencyState.SAFE -> "Time remaining"
+                },
+                urgencyState = urgencyState,
+                modifier = Modifier.size(200.dp)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -647,25 +667,40 @@ fun ActiveSessionCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedButton(
-                    onClick = { onExtend(15) },
+                    onClick = {
+                        if (hapticsEnabled) {
+                            com.parktimedetector.audio.VibrationHelper.performQuickExtendHaptic(context)
+                        }
+                        onExtend(15)
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("+15m", color = TextPrimary)
+                    Text("+15m", color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
-                    onClick = { onExtend(30) },
+                    onClick = {
+                        if (hapticsEnabled) {
+                            com.parktimedetector.audio.VibrationHelper.performQuickExtendHaptic(context)
+                        }
+                        onExtend(30)
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("+30m", color = TextPrimary)
+                    Text("+30m", color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
                 OutlinedButton(
-                    onClick = { onExtend(60) },
+                    onClick = {
+                        if (hapticsEnabled) {
+                            com.parktimedetector.audio.VibrationHelper.performQuickExtendHaptic(context)
+                        }
+                        onExtend(60)
+                    },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("+1h", color = TextPrimary)
+                    Text("+1h", color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 }
             }
 

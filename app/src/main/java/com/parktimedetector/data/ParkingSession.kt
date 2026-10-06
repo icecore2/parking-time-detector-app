@@ -15,6 +15,7 @@ data class ParkingSession(
     val advanceWarningMinutes: Int = 10,
     val isActive: Boolean = true,
     val isNotifiedAdvance: Boolean = false,
+    val isNotifiedCritical: Boolean = false,
     val isNotifiedExpiry: Boolean = false,
     val rawNotificationText: String? = null,
     val actualStopTimeMillis: Long? = null,
@@ -54,5 +55,10 @@ data class ParkingSession(
     fun isInAdvanceWarningZone(now: Long = System.currentTimeMillis()): Boolean {
         val warningThreshold = endTimeMillis - (advanceWarningMinutes * 60 * 1000L)
         return now >= warningThreshold && !isExpired(now)
+    }
+
+    fun isInCriticalZone(now: Long = System.currentTimeMillis(), criticalMinutes: Int = 2): Boolean {
+        val criticalThreshold = endTimeMillis - (criticalMinutes * 60 * 1000L)
+        return now >= criticalThreshold && !isExpired(now)
     }
 }

@@ -1,9 +1,13 @@
 package com.parktimedetector.ui.screens
 
 import android.content.Intent
+import android.media.RingtoneManager
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,6 +26,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import com.parktimedetector.audio.SoundProfileType
+import com.parktimedetector.audio.VibrationPatternType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Check
@@ -30,6 +36,7 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -59,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.parktimedetector.service.ParkingAlarmScheduler
 import com.parktimedetector.service.ParkingNotificationListenerService
+import com.parktimedetector.ui.theme.AccentCyan
 import com.parktimedetector.ui.theme.AmberWarning
 import com.parktimedetector.ui.theme.CardBackground
 import com.parktimedetector.ui.theme.EmeraldGreen
@@ -164,7 +172,561 @@ fun SettingsScreen(
             }
         }
 
-        // Detection Approval & Notification System Card
+        // 2. Escalating Alarm & Sound Profiles Card
+        val soundAlerts by viewModel.soundAlerts.collectAsState()
+        val vibrationAlerts by viewModel.vibrationAlerts.collectAsState()
+        val alarmSoundType by viewModel.alarmSoundType.collectAsState()
+        val customAlarmUri by viewModel.customAlarmUri.collectAsState()
+        val customAlarmTitle by viewModel.customAlarmTitle.collectAsState()
+        val volumeEscalationEnabled by viewModel.volumeEscalationEnabled.collectAsState()
+        val escalationDurationSeconds by viewModel.escalationDurationSeconds.collectAsState()
+        val criticalWarningMinutes by viewModel.criticalWarningMinutes.collectAsState()
+        val persistentVibrationEnabled by viewModel.persistentVibrationEnabled.collectAsState()
+        val vibrationPatternType by viewModel.vibrationPatternType.collectAsState()
+        val hapticFeedbackEnabled by viewModel.hapticFeedbackEnabled.collectAsState()
+        val isAlarmPlaying by viewModel.isAlarmPlaying.collectAsState()
+
+        val ringtonePickerLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            if (result.resultCode == android.app.Activity.RESULT_OK) {
+                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+                }
+                if (uri != null) {
+                    val ringtone = RingtoneManager.getRingtone(context, uri)
+                    val title = ringtone?.getTitle(context) ?: "Custom Sound"
+                    viewModel.setCustomAlarmTone(uri.toString(), title)
+                    viewModel.setAlarmSoundType(SoundProfileType.CUSTOM_TONE)
+                    Toast.makeText(context, "Selected alarm sound: $title", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Alarm, contentDescription = null, tint = AmberWarning)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "🔊 Escalating Alarm & Sound Profiles",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Configure custom sound profiles, volume ramping, and persistent vibration patterns when entering the critical expiry zone.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Sound Alerts Master Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Audible Alarm Alerts",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Play alarm audio on critical expiry and when session ends.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    androidx.compose.material3.Switch(
+                        checked = soundAlerts,
+                        onCheckedChange = { viewModel.toggleSoundAlerts(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(
+                            checkedThumbColor = AmberWarning,
+                            checkedTrackColor = AmberWarning.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                if (soundAlerts) {
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Sound Profile Type Selection
+                    Text(
+                        text = "Alarm Sound Profile",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SoundProfileType.values().forEach { profile ->
+                        val isSelected = alarmSoundType == profile.name
+                        Surface(
+                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                            shape = RoundedCornerShape(12.dp),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.setAlarmSoundType(profile) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.RadioButton(
+                                    selected = isSelected,
+                                    onClick = { viewModel.setAlarmSoundType(profile) },
+                                    colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = profile.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isSelected) PrimaryBlue else TextPrimary
+                                    )
+                                    Text(
+                                        text = if (profile == SoundProfileType.CUSTOM_TONE && !customAlarmTitle.isNullOrBlank()) {
+                                            "Selected: $customAlarmTitle"
+                                        } else {
+                                            profile.description
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Button to launch Ringtone Picker if Custom Tone is selected
+                    if (alarmSoundType == SoundProfileType.CUSTOM_TONE.name) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM or RingtoneManager.TYPE_NOTIFICATION or RingtoneManager.TYPE_RINGTONE)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Select Alarm Sound")
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                                    if (customAlarmUri != null) {
+                                        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, Uri.parse(customAlarmUri))
+                                    }
+                                }
+                                ringtonePickerLauncher.launch(intent)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (customAlarmTitle.isNullOrBlank()) "Choose from Device Sounds..." else "Change Sound ($customAlarmTitle)",
+                                color = PrimaryBlue
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Volume Escalation Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Volume Escalation",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = EmeraldGreen.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "GRADUAL RAMP",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = EmeraldGreen,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "Starts quietly (~15% volume) and ramps smoothly to 100% so you are never startled.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        androidx.compose.material3.Switch(
+                            checked = volumeEscalationEnabled,
+                            onCheckedChange = { viewModel.toggleVolumeEscalation(it) },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = EmeraldGreen,
+                                checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
+                            )
+                        )
+                    }
+
+                    if (volumeEscalationEnabled) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Ramp Duration:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(10, 20, 30).forEach { seconds ->
+                                val isSelected = escalationDurationSeconds == seconds
+                                Surface(
+                                    color = if (isSelected) EmeraldGreen else SurfaceDark,
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { viewModel.setEscalationDurationSeconds(seconds) }
+                                ) {
+                                    Text(
+                                        text = "${seconds}s${if (seconds == 20) " (Default)" else ""}",
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        color = if (isSelected) Color.Black else TextPrimary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Critical Expiry Zone Threshold (e.g. 2 minutes)
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Critical Expiry Zone",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = RoseRed.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "PULSING RED ZONE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = RoseRed,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "When remaining time drops below this threshold, the circular progress gauge turns Pulsing Red, and escalating alarm audio and persistent vibrations trigger.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(1, 2, 3, 5).forEach { mins ->
+                            val isSelected = criticalWarningMinutes == mins
+                            Surface(
+                                color = if (isSelected) RoseRed else SurfaceDark,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.setCriticalWarningMinutes(mins) }
+                            ) {
+                                Text(
+                                    text = "$mins m${if (mins == 2) " (Default)" else ""}",
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    color = if (isSelected) Color.White else TextPrimary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Vibration Alerts & Patterns
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Persistent Vibration Pattern",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Vibrates persistently in critical zone until dismissed, snoozed, or extended.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    androidx.compose.material3.Switch(
+                        checked = vibrationAlerts && persistentVibrationEnabled,
+                        onCheckedChange = {
+                            viewModel.toggleVibrationAlerts(it)
+                            viewModel.togglePersistentVibration(it)
+                        },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(
+                            checkedThumbColor = PrimaryBlue,
+                            checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                if (vibrationAlerts && persistentVibrationEnabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    VibrationPatternType.values().forEach { pattern ->
+                        val isSelected = vibrationPatternType == pattern.name
+                        Surface(
+                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                            shape = RoundedCornerShape(10.dp),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue) else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 3.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { viewModel.setVibrationPatternType(pattern) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.RadioButton(
+                                        selected = isSelected,
+                                        onClick = { viewModel.setVibrationPatternType(pattern) },
+                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = pattern.displayName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) PrimaryBlue else TextPrimary
+                                        )
+                                        Text(
+                                            text = pattern.description,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                                OutlinedButton(
+                                    onClick = { viewModel.previewVibrationPattern(pattern) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Feel", color = PrimaryBlue, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Test Controls Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isAlarmPlaying) {
+                        Button(
+                            onClick = { viewModel.stopAlarmNow() },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("⏹ Stop Playing Alarm", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = {
+                                val profile = try { SoundProfileType.valueOf(alarmSoundType) } catch (_: Exception) { SoundProfileType.SYSTEM_ALARM }
+                                val pattern = VibrationPatternType.fromNameOrDefault(vibrationPatternType)
+                                viewModel.previewAlarmSound(
+                                    profile = profile,
+                                    customUriString = customAlarmUri,
+                                    escalationEnabled = volumeEscalationEnabled,
+                                    escalationSeconds = escalationDurationSeconds,
+                                    vibrationEnabled = vibrationAlerts,
+                                    vibrationPattern = pattern
+                                )
+                                Toast.makeText(context, "Testing alarm sound & volume escalation...", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Preview Sound", color = AmberWarning, fontSize = 12.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.triggerCriticalAlarmNow()
+                                Toast.makeText(context, "Critical alarm triggered! Check notification bar.", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Test Critical Alert", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. UI Polish & Tactile Haptic Feedback Card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentCyan)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "✨ Visual & Tactile Feedback",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Controls animations and tactile touch sensations across the app.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Tactile Haptic Feedback Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Tactile Haptic Feedback",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Delivers a crisp physical click sensation when tapping timer quick-extend buttons (+15m, +30m, +1h).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    androidx.compose.material3.Switch(
+                        checked = hapticFeedbackEnabled,
+                        onCheckedChange = { viewModel.toggleHapticFeedback(it) },
+                        colors = androidx.compose.material3.SwitchDefaults.colors(
+                            checkedThumbColor = AccentCyan,
+                            checkedTrackColor = AccentCyan.copy(alpha = 0.4f)
+                        )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Dynamic Gauge Explanation Surface
+                Surface(
+                    color = SurfaceDark,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = EmeraldGreen.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Text(
+                                    text = "ACTIVE",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldGreen,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Dynamic Circular Progress Transitions",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "The timer gauge automatically transitions: Green (Safe) → Amber (Advance Warning) → Pulsing Red (Critical Zone ≤ ${criticalWarningMinutes}m & Expired), accompanied by an ambient breathing glow.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+            }
+        }
         val alwaysDetect by viewModel.alwaysDetect.collectAsState()
         val requireApproval by viewModel.requireApproval.collectAsState()
         val showConfirmationDialogs by viewModel.showConfirmationDialogs.collectAsState()

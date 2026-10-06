@@ -108,6 +108,8 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
     private var lastExtractedHash: Int = 0
     private var lastDetectedEndTime: Long = 0L
     private var overlayView: View? = null
+    private var cachedQuickRenewEnabled = true
+    private var cachedPauseBeforePayment = true
 
     // Flow tracking state variables
     private var isStartConfirmationDialogActive = false
@@ -165,6 +167,16 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
             "Screen Detection Accessibility Service connected and active"
         )
 
+        // Cache Quick-Renew settings in memory for zero-latency Main-thread access
+        serviceScope.launch {
+            val prefs = UserPreferencesRepository(applicationContext)
+            prefs.enableQuickRenewAutomation.collect { cachedQuickRenewEnabled = it }
+        }
+        serviceScope.launch {
+            val prefs = UserPreferencesRepository(applicationContext)
+            prefs.pauseBeforePayment.collect { cachedPauseBeforePayment = it }
+        }
+
         try {
             val filter = android.content.IntentFilter().apply {
                 addAction(android.content.Intent.ACTION_SCREEN_OFF)
@@ -180,8 +192,26 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
         if (event == null) return
         val pkgName = event.packageName?.toString() ?: return
 
-        // Ignore our own app
-        if (pkgName == packageName) return
+        val isMockActivityEvent = (pkgName == packageName) && (
+            (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName)) ||
+            event.className?.contains("Mock", ignoreCase = true) == true
+        )
+
+        // Ignore our own app unless testing a mock activity or QuickRenew is armed for mock
+        if (pkgName == packageName && !isMockActivityEvent) return
+
+        // Immediately handle Quick-Renew synchronously on Main thread while rootNode is fresh
+        if (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName) && cachedQuickRenewEnabled) {
+            val root = try { rootInActiveWindow ?: event.source } catch (_: Exception) { null }
+            if (root != null) {
+                QuickRenewManager.handleAccessibilityEvent(
+                    service = this@ParkingAccessibilityService,
+                    rootNode = root,
+                    eventPackage = pkgName,
+                    pauseBeforePayment = cachedPauseBeforePayment
+                )
+            }
+        }
 
         serviceScope.launch {
             try {
@@ -193,26 +223,10 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                     pkgName == NotificationHelper.PARKEDIN_PACKAGE ||
                     pkgName.contains("cpa", ignoreCase = true) ||
                     pkgName.contains("myparking", ignoreCase = true) ||
-                    pkgName.contains("parkedin", ignoreCase = true)
+                    pkgName.contains("parkedin", ignoreCase = true) ||
+                    isMockActivityEvent
 
                 if (!isTargetParkingApp) return@launch
-
-                // If Quick-Renew automation is armed, process automated steps first
-                if (QuickRenewManager.isArmed()) {
-                    val quickRenewEnabled = prefsRepo.enableQuickRenewAutomation.first()
-                    if (quickRenewEnabled) {
-                        val pauseBeforePayment = prefsRepo.pauseBeforePayment.first()
-                        val root = try { rootInActiveWindow ?: event.source } catch (_: Exception) { null }
-                        if (root != null) {
-                            QuickRenewManager.handleAccessibilityEvent(
-                                service = this@ParkingAccessibilityService,
-                                rootNode = root,
-                                eventPackage = pkgName,
-                                pauseBeforePayment = pauseBeforePayment
-                            )
-                        }
-                    }
-                }
 
                 val alwaysDetect = prefsRepo.alwaysDetect.first()
                 if (!alwaysDetect && !ManualDetectionManager.isDetectionWindowActive()) {

@@ -38,6 +38,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Mock Parking Apps for Testing Quick-Renew Automation Sandbox -->
+        <activity
+            android:name=".mock.MockMyParkingActivity"
+            android:exported="true"
+            android:label="Mock MyParking"
+            android:theme="@style/Theme.ParkingTimeDetector" />
+
+        <activity
+            android:name=".mock.MockParkedInActivity"
+            android:exported="true"
+            android:label="Mock ParkedIn"
+            android:theme="@style/Theme.ParkingTimeDetector" />
+
         <!-- Notification Listener Service to catch parking notifications -->
         <service
             android:name=".service.ParkingNotificationListenerService"

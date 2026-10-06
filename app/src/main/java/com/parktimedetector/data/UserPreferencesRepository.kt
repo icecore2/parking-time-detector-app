@@ -57,8 +57,19 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_ALWAYS_DETECT = booleanPreferencesKey("always_detect")
         val KEY_ENABLE_QUICK_RENEW_AUTOMATION = booleanPreferencesKey("enable_quick_renew_automation")
         val KEY_PAUSE_BEFORE_PAYMENT = booleanPreferencesKey("pause_before_payment")
+        val KEY_ALARM_SOUND_TYPE = stringPreferencesKey("alarm_sound_type")
+        val KEY_CUSTOM_ALARM_URI = stringPreferencesKey("custom_alarm_uri")
+        val KEY_CUSTOM_ALARM_TITLE = stringPreferencesKey("custom_alarm_title")
+        val KEY_VOLUME_ESCALATION_ENABLED = booleanPreferencesKey("volume_escalation_enabled")
+        val KEY_ESCALATION_DURATION_SECONDS = intPreferencesKey("escalation_duration_seconds")
+        val KEY_CRITICAL_WARNING_MINUTES = intPreferencesKey("critical_warning_minutes")
+        val KEY_PERSISTENT_VIBRATION_ENABLED = booleanPreferencesKey("persistent_vibration_enabled")
+        val KEY_VIBRATION_PATTERN_TYPE = stringPreferencesKey("vibration_pattern_type")
+        val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
 
         const val DEFAULT_ADVANCE_MINUTES = 15
+        const val DEFAULT_CRITICAL_MINUTES = 2
+        const val DEFAULT_ESCALATION_SECONDS = 20
         const val DEFAULT_PARKEDIN_PACKAGE = "com.preciseparklink.parkedin"
         const val DEFAULT_MYPARKING_PACKAGE = "com.cpa.accountManagement"
 
@@ -129,6 +140,42 @@ class UserPreferencesRepository(private val context: Context) {
 
     val pauseBeforePayment: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_PAUSE_BEFORE_PAYMENT] ?: true
+    }
+
+    val alarmSoundType: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ALARM_SOUND_TYPE] ?: com.parktimedetector.audio.SoundProfileType.SYSTEM_ALARM.name
+    }
+
+    val customAlarmUri: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_CUSTOM_ALARM_URI]
+    }
+
+    val customAlarmTitle: Flow<String?> = context.dataStore.data.map { preferences ->
+        preferences[KEY_CUSTOM_ALARM_TITLE]
+    }
+
+    val volumeEscalationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_VOLUME_ESCALATION_ENABLED] ?: true
+    }
+
+    val escalationDurationSeconds: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[KEY_ESCALATION_DURATION_SECONDS] ?: DEFAULT_ESCALATION_SECONDS
+    }
+
+    val criticalWarningMinutes: Flow<Int> = context.dataStore.data.map { preferences ->
+        preferences[KEY_CRITICAL_WARNING_MINUTES] ?: DEFAULT_CRITICAL_MINUTES
+    }
+
+    val persistentVibrationEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_PERSISTENT_VIBRATION_ENABLED] ?: true
+    }
+
+    val vibrationPatternType: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[KEY_VIBRATION_PATTERN_TYPE] ?: com.parktimedetector.audio.VibrationPatternType.URGENT_PULSE.name
+    }
+
+    val hapticFeedbackEnabled: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_HAPTIC_FEEDBACK_ENABLED] ?: true
     }
 
     suspend fun setOverlayDialogPosition(position: OverlayDialogPosition) {
@@ -220,6 +267,63 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setPauseBeforePayment(paused: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_PAUSE_BEFORE_PAYMENT] = paused
+        }
+    }
+
+    suspend fun setAlarmSoundType(type: com.parktimedetector.audio.SoundProfileType) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_ALARM_SOUND_TYPE] = type.name
+        }
+    }
+
+    suspend fun setCustomAlarmTone(uriString: String?, title: String?) {
+        context.dataStore.edit { preferences ->
+            if (uriString != null) {
+                preferences[KEY_CUSTOM_ALARM_URI] = uriString
+            } else {
+                preferences.remove(KEY_CUSTOM_ALARM_URI)
+            }
+            if (title != null) {
+                preferences[KEY_CUSTOM_ALARM_TITLE] = title
+            } else {
+                preferences.remove(KEY_CUSTOM_ALARM_TITLE)
+            }
+        }
+    }
+
+    suspend fun setVolumeEscalationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_VOLUME_ESCALATION_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setEscalationDurationSeconds(seconds: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_ESCALATION_DURATION_SECONDS] = seconds
+        }
+    }
+
+    suspend fun setCriticalWarningMinutes(minutes: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_CRITICAL_WARNING_MINUTES] = minutes
+        }
+    }
+
+    suspend fun setPersistentVibrationEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_PERSISTENT_VIBRATION_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setVibrationPatternType(type: com.parktimedetector.audio.VibrationPatternType) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_VIBRATION_PATTERN_TYPE] = type.name
+        }
+    }
+
+    suspend fun setHapticFeedbackEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_HAPTIC_FEEDBACK_ENABLED] = enabled
         }
     }
 }

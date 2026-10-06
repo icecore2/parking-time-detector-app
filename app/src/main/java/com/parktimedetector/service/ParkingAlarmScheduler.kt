@@ -19,11 +19,11 @@ object ParkingAlarmScheduler {
         return true
     }
 
-    fun scheduleAlarms(context: Context, session: ParkingSession) {
+    fun scheduleAlarms(context: Context, session: ParkingSession, criticalWarningMinutes: Int = 2) {
         val alarmManager = context.getSystemService(AlarmManager::class.java) ?: return
         val now = System.currentTimeMillis()
 
-        // 1. Advance Warning Alarm
+        // 1. Advance Warning Alarm (e.g. 15 mins before expiry)
         val advanceTimeMillis = session.endTimeMillis - (session.advanceWarningMinutes * 60 * 1000L)
         if (advanceTimeMillis > now && !session.isNotifiedAdvance) {
             val advanceIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
@@ -40,7 +40,24 @@ object ParkingAlarmScheduler {
             setExactAlarm(alarmManager, advanceTimeMillis, advancePI)
         }
 
-        // 2. Expiry Alarm
+        // 2. Critical Warning Alarm (e.g. 2 mins before expiry)
+        val criticalTimeMillis = session.endTimeMillis - (criticalWarningMinutes * 60 * 1000L)
+        if (criticalTimeMillis > now && !session.isNotifiedCritical) {
+            val criticalIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+                action = ParkingAlarmReceiver.ACTION_CRITICAL_WARNING
+                putExtra(ParkingAlarmReceiver.EXTRA_SESSION_ID, session.id)
+            }
+            val criticalPI = PendingIntent.getBroadcast(
+                context,
+                (session.id * 10 + 3).toInt(),
+                criticalIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            setExactAlarm(alarmManager, criticalTimeMillis, criticalPI)
+        }
+
+        // 3. Expiry Alarm (at expiry time)
         if (session.endTimeMillis > now && !session.isNotifiedExpiry) {
             val expireIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
                 action = ParkingAlarmReceiver.ACTION_EXPIRED
@@ -89,6 +106,20 @@ object ParkingAlarmScheduler {
         if (advancePI != null) {
             alarmManager.cancel(advancePI)
             advancePI.cancel()
+        }
+
+        val criticalIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+            action = ParkingAlarmReceiver.ACTION_CRITICAL_WARNING
+        }
+        val criticalPI = PendingIntent.getBroadcast(
+            context,
+            (sessionId * 10 + 3).toInt(),
+            criticalIntent,
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        )
+        if (criticalPI != null) {
+            alarmManager.cancel(criticalPI)
+            criticalPI.cancel()
         }
 
         val expireIntent = Intent(context, ParkingAlarmReceiver::class.java).apply {

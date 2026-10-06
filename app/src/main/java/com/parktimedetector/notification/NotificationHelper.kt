@@ -25,6 +25,7 @@ object NotificationHelper {
     const val NOTIFICATION_ID_STATUS = 1001
     const val NOTIFICATION_ID_ADVANCE = 1002
     const val NOTIFICATION_ID_EXPIRED = 1003
+    const val NOTIFICATION_ID_CRITICAL = 1006
 
     const val PARKEDIN_PACKAGE = "com.preciseparklink.parkedin"
     const val MYPARKING_PACKAGE = "com.cpa.accountManagement"
@@ -145,6 +146,30 @@ object NotificationHelper {
     }
 
     /**
+     * PendingIntent to stop escalating alarm audio & vibration immediately.
+     */
+    fun createStopAlarmPendingIntent(context: Context, requestCode: Int = 110): PendingIntent {
+        val intent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+            action = ParkingAlarmReceiver.ACTION_STOP_ALARM
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
+    }
+
+    /**
+     * PendingIntent to quick-extend an active parking session by 15m from a notification.
+     */
+    fun createExtendAlarmPendingIntent(context: Context, sessionId: Long, extraMinutes: Int = 15, requestCode: Int = 111): PendingIntent {
+        val intent = Intent(context, ParkingAlarmReceiver::class.java).apply {
+            action = ParkingAlarmReceiver.ACTION_EXTEND_ALARM
+            putExtra(ParkingAlarmReceiver.EXTRA_SESSION_ID, sessionId)
+            putExtra(ParkingAlarmReceiver.EXTRA_EXTEND_MINUTES, extraMinutes)
+        }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, requestCode, intent, flags)
+    }
+
+    /**
      * Shows live ongoing countdown notification.
      * Pressing this notification opens the relevant parking app (ParkedIn or MyParking).
      */
@@ -216,12 +241,49 @@ object NotificationHelper {
     }
 
     /**
+     * Shows maximum-priority Critical Warning notification (e.g. 2 mins before expiry)
+     * with direct Stop Alarm and Quick-Extend actions.
+     */
+    fun showCriticalWarningNotification(context: Context, session: ParkingSession) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        val openAppPI = createTargetAppPendingIntent(context, session.packageName, 104)
+        val stopAlarmPI = createStopAlarmPendingIntent(context, 105)
+        val extendPI = createExtendAlarmPendingIntent(context, session.id, 15, 106)
+
+        val appName = getAppNameForPackage(session.packageName)
+        val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+        val formattedEndTime = timeFormat.format(Date(session.endTimeMillis))
+        val zoneText = session.zoneOrLot?.let { " at $it" } ?: ""
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_URGENT_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("🚨 CRITICAL: Parking Expiring Soon$zoneText!")
+            .setContentText("Expires at $formattedEndTime (< 2m remaining). Tap to extend or stop alarm!")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    "CRITICAL ALERT: Your parking session$zoneText expires at $formattedEndTime!\n\n" +
+                    "Extend your session now with '+15m Extend', open $appName, or tap 'Stop Alarm' to mute."
+                )
+            )
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .setContentIntent(openAppPI)
+            .addAction(0, "⏹ Stop Alarm", stopAlarmPI)
+            .addAction(0, "⚡ +15m Extend", extendPI)
+            .addAction(0, "Open $appName", openAppPI)
+
+        notificationManager.notify(NOTIFICATION_ID_CRITICAL, builder.build())
+    }
+
+    /**
      * Shows high-priority Expired notification.
      * Pressing opens the parking app.
      */
     fun showExpiredNotification(context: Context, session: ParkingSession) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         val openAppPI = createTargetAppPendingIntent(context, session.packageName, 103)
+        val stopAlarmPI = createStopAlarmPendingIntent(context, 107)
 
         val appName = getAppNameForPackage(session.packageName)
         val zoneText = session.zoneOrLot?.let { " at $it" } ?: ""
@@ -239,10 +301,12 @@ object NotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setContentIntent(openAppPI)
+            .addAction(0, "⏹ Stop Alarm", stopAlarmPI)
             .addAction(0, "Open $appName", openAppPI)
 
         notificationManager.notify(NOTIFICATION_ID_EXPIRED, builder.build())
         cancelStatusNotification(context)
+        cancelCriticalWarningNotification(context)
     }
 
     const val NOTIFICATION_ID_APPROVAL = 1004
@@ -426,12 +490,19 @@ object NotificationHelper {
         notificationManager.cancel(NOTIFICATION_ID_STATUS)
     }
 
+    fun cancelCriticalWarningNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(NOTIFICATION_ID_CRITICAL)
+    }
+
     fun cancelAll(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         notificationManager.cancel(NOTIFICATION_ID_STATUS)
         notificationManager.cancel(NOTIFICATION_ID_ADVANCE)
+        notificationManager.cancel(NOTIFICATION_ID_CRITICAL)
         notificationManager.cancel(NOTIFICATION_ID_EXPIRED)
         notificationManager.cancel(NOTIFICATION_ID_APPROVAL)
         notificationManager.cancel(NOTIFICATION_ID_STOP_APPROVAL)
+        com.parktimedetector.audio.AlarmSoundManager.stop(context)
     }
 }

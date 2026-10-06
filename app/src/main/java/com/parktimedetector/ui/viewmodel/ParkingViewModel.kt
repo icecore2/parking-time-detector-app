@@ -85,6 +85,41 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     val isManualDetectionActive: StateFlow<Boolean> = com.parktimedetector.service.ManualDetectionManager.isDetectionActive
     val manualDetectionRemainingSeconds: StateFlow<Int> = com.parktimedetector.service.ManualDetectionManager.remainingSeconds
 
+    val soundAlerts: StateFlow<Boolean> = prefsRepo.soundAlerts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val vibrationAlerts: StateFlow<Boolean> = prefsRepo.vibrationAlerts
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val alarmSoundType: StateFlow<String> = prefsRepo.alarmSoundType
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.audio.SoundProfileType.SYSTEM_ALARM.name)
+
+    val customAlarmUri: StateFlow<String?> = prefsRepo.customAlarmUri
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val customAlarmTitle: StateFlow<String?> = prefsRepo.customAlarmTitle
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val volumeEscalationEnabled: StateFlow<Boolean> = prefsRepo.volumeEscalationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val escalationDurationSeconds: StateFlow<Int> = prefsRepo.escalationDurationSeconds
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DEFAULT_ESCALATION_SECONDS)
+
+    val criticalWarningMinutes: StateFlow<Int> = prefsRepo.criticalWarningMinutes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DEFAULT_CRITICAL_MINUTES)
+
+    val persistentVibrationEnabled: StateFlow<Boolean> = prefsRepo.persistentVibrationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val vibrationPatternType: StateFlow<String> = prefsRepo.vibrationPatternType
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.audio.VibrationPatternType.URGENT_PULSE.name)
+
+    val hapticFeedbackEnabled: StateFlow<Boolean> = prefsRepo.hapticFeedbackEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val isAlarmPlaying: StateFlow<Boolean> = com.parktimedetector.audio.AlarmSoundManager.isPlaying
+
     fun toggleAlwaysDetect(enabled: Boolean) {
         viewModelScope.launch {
             prefsRepo.setAlwaysDetect(enabled)
@@ -136,8 +171,135 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             val session = dao.getActiveSession()
             if (session != null) {
                 NotificationHelper.showExpiredNotification(getApplication(), session)
+                com.parktimedetector.audio.AlarmSoundManager.startAlarm(getApplication())
                 com.parktimedetector.data.AppLogger.info(getApplication(), "SIMULATOR", "Triggered expiry alert for session #${session.id}")
             }
+        }
+    }
+
+    fun triggerCriticalAlarmNow() {
+        viewModelScope.launch {
+            val session = dao.getActiveSession()
+            if (session != null) {
+                NotificationHelper.showCriticalWarningNotification(getApplication(), session)
+                com.parktimedetector.audio.AlarmSoundManager.startAlarm(getApplication())
+                com.parktimedetector.data.AppLogger.info(getApplication(), "SIMULATOR", "Triggered critical warning alert for session #${session.id}")
+            } else {
+                // If no active session, synthesize a temporary session for alarm testing
+                val dummy = ParkingSession(
+                    id = 9999L,
+                    packageName = NotificationHelper.PARKEDIN_PACKAGE,
+                    source = "Simulator Test",
+                    zoneOrLot = "Zone 4022",
+                    startTimeMillis = System.currentTimeMillis() - (58 * 60 * 1000L),
+                    endTimeMillis = System.currentTimeMillis() + (2 * 60 * 1000L),
+                    isActive = true
+                )
+                NotificationHelper.showCriticalWarningNotification(getApplication(), dummy)
+                com.parktimedetector.audio.AlarmSoundManager.startAlarm(getApplication())
+                com.parktimedetector.data.AppLogger.info(getApplication(), "SIMULATOR", "Triggered critical warning alert with test session")
+            }
+        }
+    }
+
+    fun stopAlarmNow() {
+        com.parktimedetector.audio.AlarmSoundManager.stop(getApplication())
+    }
+
+    fun previewAlarmSound(
+        profile: com.parktimedetector.audio.SoundProfileType,
+        customUriString: String?,
+        escalationEnabled: Boolean,
+        escalationSeconds: Int,
+        vibrationEnabled: Boolean,
+        vibrationPattern: com.parktimedetector.audio.VibrationPatternType
+    ) {
+        com.parktimedetector.audio.AlarmSoundManager.previewAlarm(
+            context = getApplication(),
+            profile = profile,
+            customUriString = customUriString,
+            escalationEnabled = escalationEnabled,
+            escalationSeconds = escalationSeconds,
+            vibrationEnabled = vibrationEnabled,
+            vibrationPattern = vibrationPattern
+        )
+    }
+
+    fun previewVibrationPattern(pattern: com.parktimedetector.audio.VibrationPatternType) {
+        com.parktimedetector.audio.VibrationHelper.previewPatternOnce(getApplication(), pattern)
+    }
+
+    fun toggleSoundAlerts(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setSoundAlerts(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Sound alerts set to: $enabled")
+        }
+    }
+
+    fun toggleVibrationAlerts(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setVibrationAlerts(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Vibration alerts set to: $enabled")
+        }
+    }
+
+    fun setAlarmSoundType(type: com.parktimedetector.audio.SoundProfileType) {
+        viewModelScope.launch {
+            prefsRepo.setAlarmSoundType(type)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Alarm sound profile set to: ${type.name}")
+        }
+    }
+
+    fun setCustomAlarmTone(uriString: String?, title: String?) {
+        viewModelScope.launch {
+            prefsRepo.setCustomAlarmTone(uriString, title)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Custom alarm tone set: $title ($uriString)")
+        }
+    }
+
+    fun toggleVolumeEscalation(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setVolumeEscalationEnabled(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Volume escalation set to: $enabled")
+        }
+    }
+
+    fun setEscalationDurationSeconds(seconds: Int) {
+        viewModelScope.launch {
+            prefsRepo.setEscalationDurationSeconds(seconds)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Escalation duration set to: ${seconds}s")
+        }
+    }
+
+    fun setCriticalWarningMinutes(minutes: Int) {
+        viewModelScope.launch {
+            prefsRepo.setCriticalWarningMinutes(minutes)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Critical warning threshold set to: ${minutes}m")
+            val current = dao.getActiveSession()
+            if (current != null && current.isActive) {
+                ParkingAlarmScheduler.scheduleAlarms(getApplication(), current, minutes)
+            }
+        }
+    }
+
+    fun togglePersistentVibration(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setPersistentVibrationEnabled(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Persistent vibration set to: $enabled")
+        }
+    }
+
+    fun setVibrationPatternType(type: com.parktimedetector.audio.VibrationPatternType) {
+        viewModelScope.launch {
+            prefsRepo.setVibrationPatternType(type)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Vibration pattern set to: ${type.name}")
+        }
+    }
+
+    fun toggleHapticFeedback(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setHapticFeedbackEnabled(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Haptic feedback set to: $enabled")
         }
     }
 
@@ -538,17 +700,48 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             session.packageName.contains("myparking", ignoreCase = true) -> NotificationHelper.MYPARKING_PACKAGE
             else -> NotificationHelper.PARKEDIN_PACKAGE
         }
+        val isMyParking = resolvedPkg == NotificationHelper.MYPARKING_PACKAGE
+        val pm = context.packageManager
+        val isAppInstalled = pm.getLaunchIntentForPackage(resolvedPkg) != null
 
-        if (autoEnabled) {
+        if (isAppInstalled) {
+            if (autoEnabled) {
+                com.parktimedetector.service.QuickRenewManager.arm(
+                    context = context,
+                    packageName = resolvedPkg,
+                    zoneOrLot = session.zoneOrLot,
+                    locationAddress = session.locationAddress,
+                    appType = if (isMyParking) com.parktimedetector.service.RenewAppType.MYPARKING else com.parktimedetector.service.RenewAppType.PARKEDIN
+                )
+            }
+            openTargetApp(context, resolvedPkg)
+        } else {
+            // Target app is not installed: Launch simulated mock app to test & validate Quick-Renew!
+            launchMockApp(context, isMyParking, session)
+        }
+    }
+
+    fun launchMockApp(context: Context, isMyParking: Boolean, session: ParkingSession? = null) {
+        val targetClass = if (isMyParking) {
+            com.parktimedetector.mock.MockMyParkingActivity::class.java
+        } else {
+            com.parktimedetector.mock.MockParkedInActivity::class.java
+        }
+
+        if (enableQuickRenewAutomation.value) {
             com.parktimedetector.service.QuickRenewManager.arm(
                 context = context,
-                packageName = resolvedPkg,
-                zoneOrLot = session.zoneOrLot,
-                locationAddress = session.locationAddress
+                packageName = context.packageName,
+                zoneOrLot = session?.zoneOrLot ?: (if (isMyParking) "Lot 58 - 935 - 4 Av SW" else "Zone 4022"),
+                locationAddress = session?.locationAddress,
+                appType = if (isMyParking) com.parktimedetector.service.RenewAppType.MYPARKING else com.parktimedetector.service.RenewAppType.PARKEDIN
             )
         }
 
-        openTargetApp(context, resolvedPkg)
+        val intent = Intent(context, targetClass).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 
     fun disarmQuickRenew() {

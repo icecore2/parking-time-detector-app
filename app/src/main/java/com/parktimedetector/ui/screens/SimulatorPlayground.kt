@@ -233,6 +233,25 @@ fun SimulatorPlaygroundContent(
                     Text("⚡ 1-Minute Expiry Test (Watch timer count down & ring)", color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
                 }
 
+                // Quick 2-Min Critical Zone Expiry
+                OutlinedButton(
+                    onClick = {
+                        val futureTime = System.currentTimeMillis() + 120_000L
+                        val timeStr = SimpleDateFormat("h:mm:ss a", Locale.US).format(Date(futureTime))
+                        val success = viewModel.simulateParkedInNotification(
+                            title = "ParkedIn Session Started",
+                            text = "Parking active in Zone 4022. Expires at $timeStr"
+                        )
+                        if (success) {
+                            Toast.makeText(context, "2-Min Critical Zone session started! Check Pulsing Red gauge.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("🚨 2-Minute Critical Zone Test (Pulsing Red Gauge & Alarm)", color = RoseRed, fontWeight = FontWeight.Bold)
+                }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // ParkedIn 30m
                     OutlinedButton(
@@ -616,7 +635,18 @@ fun SimulatorPlaygroundContent(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("🔔 15m Advance Alert", color = AmberWarning, fontSize = 12.sp)
+                        Text("🔔 15m Advance", color = AmberWarning, fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.triggerCriticalAlarmNow()
+                            Toast.makeText(context, "Dispatched critical warning alert!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("🚨 Critical (<2m)", color = RoseRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     OutlinedButton(
@@ -627,7 +657,24 @@ fun SimulatorPlaygroundContent(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("🚨 Expiry Alarm Alert", color = RoseRed, fontSize = 12.sp)
+                        Text("⏰ Expiry", color = TextPrimary, fontSize = 12.sp)
+                    }
+                }
+
+                val isAlarmPlaying by viewModel.isAlarmPlaying.collectAsState()
+                if (isAlarmPlaying) {
+                    Button(
+                        onClick = {
+                            viewModel.stopAlarmNow()
+                            Toast.makeText(context, "Stopped alarm audio and vibration", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.StopCircle, contentDescription = null, tint = Color.White)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("⏹ Stop Ringing Alarm", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -710,34 +757,65 @@ fun SimulatorPlaygroundContent(
                 ) {
                     Button(
                         onClick = {
-                            com.parktimedetector.service.QuickRenewManager.arm(
-                                context = context,
-                                packageName = NotificationHelper.MYPARKING_PACKAGE,
-                                zoneOrLot = "Lot 58 - 935 - 4 Av SW"
-                            )
-                            Toast.makeText(context, "Armed MyParking Quick-Renew (Zone 9058)", Toast.LENGTH_SHORT).show()
+                            viewModel.launchMockApp(context, isMyParking = true)
+                            Toast.makeText(context, "Launched Mock MyParking + Armed Quick-Renew", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Arm MyParking", color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("Mock MyParking", color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
                     Button(
                         onClick = {
-                            com.parktimedetector.service.QuickRenewManager.arm(
-                                context = context,
-                                packageName = NotificationHelper.PARKEDIN_PACKAGE,
-                                zoneOrLot = "Zone 4022"
-                            )
-                            Toast.makeText(context, "Armed ParkedIn Quick-Renew (Zone 4022)", Toast.LENGTH_SHORT).show()
+                            viewModel.launchMockApp(context, isMyParking = false)
+                            Toast.makeText(context, "Launched Mock ParkedIn + Armed Quick-Renew", Toast.LENGTH_SHORT).show()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Arm ParkedIn", color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("Mock ParkedIn", color = DarkNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            com.parktimedetector.service.QuickRenewManager.arm(
+                                context = context,
+                                packageName = NotificationHelper.MYPARKING_PACKAGE,
+                                zoneOrLot = "Lot 58 - 935 - 4 Av SW",
+                                appType = com.parktimedetector.service.RenewAppType.MYPARKING
+                            )
+                            Toast.makeText(context, "Armed MyParking Quick-Renew (Zone 9058)", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Arm Real MyParking", color = PrimaryBlue, fontSize = 11.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            com.parktimedetector.service.QuickRenewManager.arm(
+                                context = context,
+                                packageName = NotificationHelper.PARKEDIN_PACKAGE,
+                                zoneOrLot = "Zone 4022",
+                                appType = com.parktimedetector.service.RenewAppType.PARKEDIN
+                            )
+                            Toast.makeText(context, "Armed ParkedIn Quick-Renew (Zone 4022)", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Arm Real ParkedIn", color = AccentCyan, fontSize = 11.sp)
                     }
                 }
 
