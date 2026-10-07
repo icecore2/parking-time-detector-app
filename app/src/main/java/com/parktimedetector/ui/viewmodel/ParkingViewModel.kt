@@ -995,6 +995,17 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     val updateState: StateFlow<com.parktimedetector.update.UpdateState> =
         com.parktimedetector.update.AppUpdateEngine.updateState
 
+    val latestCachedUpdateInfo: com.parktimedetector.update.AppUpdateInfo?
+        get() = com.parktimedetector.update.AppUpdateEngine.latestCachedUpdateInfo
+
+    fun checkOrClearIfInstalled(context: Context): Boolean {
+        return com.parktimedetector.update.AppUpdateEngine.checkOrClearIfInstalled(context)
+    }
+
+    fun isUpdateActiveAndNewer(): Boolean {
+        return com.parktimedetector.update.AppUpdateEngine.isUpdateActiveAndNewer()
+    }
+
     fun checkForUpdates(context: Context, silent: Boolean = false) {
         com.parktimedetector.update.AppUpdateEngine.checkForUpdates(context, silent = silent)
     }

@@ -20,7 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import com.parktimedetector.ui.components.AppUpdateDialog
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.OpenInNew
@@ -44,6 +47,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import com.parktimedetector.update.UpdateState
 import com.parktimedetector.ui.components.ParkingCircularGauge
@@ -115,6 +119,8 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+
+    var showHomeUpdateDialog by remember { mutableStateOf(false) }
 
     var hasListenerPermission by remember { mutableStateOf(ParkingNotificationListenerService.isPermissionGranted(context)) }
     var hasAccessibilityPermission by remember { mutableStateOf(ParkingAccessibilityService.isAccessibilityServiceEnabled(context)) }
@@ -196,148 +202,63 @@ fun HomeScreen(
             )
         }
 
-        // App Update Banner (Available, Downloading, or Ready to Install)
-        val updateState by viewModel.updateState.collectAsState()
-        when (val state = updateState) {
-            is UpdateState.Available -> {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.15f)),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue),
-                    modifier = Modifier.fillMaxWidth()
+        // App Update Mini Badge (Compact UI element, opens update dialog)
+        if (viewModel.isUpdateActiveAndNewer()) {
+            val updateState by viewModel.updateState.collectAsState()
+            val versionLabel = when (val s = updateState) {
+                is UpdateState.Available -> "v${s.updateInfo.versionName} Available"
+                is UpdateState.Downloading -> "Downloading v${s.updateInfo.versionName} (${if (s.progressPercent >= 0) "${s.progressPercent}%" else "..."})"
+                is UpdateState.ReadyToInstall -> "v${s.updateInfo.versionName} Ready to Install"
+                else -> viewModel.latestCachedUpdateInfo?.versionName?.let { "v$it Available" } ?: "Update Available"
+            }
+
+            Surface(
+                onClick = { showHomeUpdateDialog = true },
+                shape = RoundedCornerShape(20.dp),
+                color = PrimaryBlue.copy(alpha = 0.12f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 38.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
                         Icon(
                             Icons.Default.SystemUpdate,
                             contentDescription = null,
                             tint = PrimaryBlue,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Update Available: ${state.updateInfo.versionName}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryBlue
-                            )
-                            Text(
-                                text = "A new release is available to download.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { viewModel.downloadUpdate(context, state.updateInfo) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Download", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                                OutlinedButton(
-                                    onClick = { viewModel.dismissUpdate(context) },
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Dismiss", color = TextSecondary)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            is UpdateState.Downloading -> {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = PrimaryBlue.copy(alpha = 0.15f)),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Downloading Update ${state.updateInfo.versionName}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = PrimaryBlue
-                            )
-                            Text(
-                                text = if (state.progressPercent >= 0) "${state.progressPercent}%" else "...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = PrimaryBlue
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        if (state.progressPercent >= 0) {
-                            LinearProgressIndicator(
-                                progress = { state.progressPercent / 100f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = PrimaryBlue
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = PrimaryBlue
-                            )
-                        }
-                    }
-                }
-            }
-            is UpdateState.ReadyToInstall -> {
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = EmeraldGreen.copy(alpha = 0.15f)),
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, EmeraldGreen),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = EmeraldGreen,
-                            modifier = Modifier.size(28.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = versionLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryBlue
                         )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Update Ready: ${state.updateInfo.versionName}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldGreen
-                            )
-                            Text(
-                                text = "Downloaded successfully. Install now to upgrade.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = { viewModel.installUpdate(context, state.apkFile) },
-                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
-                        }
                     }
+                    Text(
+                        text = "Update",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryBlue
+                    )
                 }
             }
-            else -> {}
+        }
+
+        if (showHomeUpdateDialog) {
+            AppUpdateDialog(
+                viewModel = viewModel,
+                onDismiss = { showHomeUpdateDialog = false }
+            )
         }
 
         // 1. Pending Stop Detection Inline Banner

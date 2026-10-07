@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -158,6 +159,7 @@ fun SettingsScreen(
     val availableCalendars by viewModel.availableCalendars.collectAsState()
 
     var showAddZoneDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
     var newZoneName by remember { mutableStateOf("") }
     var newZoneDuration by remember { mutableStateOf(60) }
     var newZoneNotes by remember { mutableStateOf("") }
@@ -238,6 +240,13 @@ fun SettingsScreen(
         )
     }
 
+    if (showUpdateDialog) {
+        com.parktimedetector.ui.components.AppUpdateDialog(
+            viewModel = viewModel,
+            onDismiss = { showUpdateDialog = false }
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -250,6 +259,12 @@ fun SettingsScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold
+        )
+
+        // Top App Version & Updates Card
+        SettingsTopUpdateCard(
+            viewModel = viewModel,
+            onOpenUpdateDialog = { showUpdateDialog = true }
         )
 
         // 0. Theme Mode Selector Card
@@ -2016,10 +2031,7 @@ fun SettingsScreen(
             }
         }
 
-        // 4. App Update Engine & Push Receiver
-        UpdateEngineCard(viewModel = viewModel)
-
-        // 5. In-App Simulator Tool
+        // 4. In-App Simulator Tool
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -2123,344 +2135,143 @@ fun PermissionRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun UpdateEngineCard(viewModel: ParkingViewModel) {
-    val context = LocalContext.current
+fun SettingsTopUpdateCard(
+    viewModel: ParkingViewModel,
+    onOpenUpdateDialog: () -> Unit
+) {
     val updateState by viewModel.updateState.collectAsState()
-    var hasInstallPermission by remember {
-        mutableStateOf(AppUpdateEngine.canRequestPackageInstalls(context))
-    }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            hasInstallPermission = AppUpdateEngine.canRequestPackageInstalls(context)
-            delay(2000)
-        }
-    }
 
     Card(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "App Update Engine",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-
                 Surface(
                     color = PrimaryBlue.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.size(44.dp)
                 ) {
-                    Text(
-                        text = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                        color = PrimaryBlue,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Push-enabled update engine for receiving push updates via broadcast, downloading, and installing new releases.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // State-specific status block
-            when (val state = updateState) {
-                is UpdateState.Idle -> {
-                    Text(
-                        text = "Engine idle. Ready to receive push updates or query GitHub releases.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted
-                    )
-                }
-
-                is UpdateState.Checking -> {
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
+                        Text(
+                            text = "App Version",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "v${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.labelMedium,
                             color = PrimaryBlue,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Checking for updates from ${state.source}...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextPrimary
+                            fontWeight = FontWeight.Bold
                         )
                     }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    when (val state = updateState) {
+                        is UpdateState.Available -> {
+                            Text(
+                                text = "🚀 Update ${state.updateInfo.versionName} available",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = EmeraldGreen,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        is UpdateState.Downloading -> {
+                            Text(
+                                text = "⏳ Downloading update (${state.progressPercent}%)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PrimaryBlue,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        is UpdateState.ReadyToInstall -> {
+                            Text(
+                                text = "📦 Update ready to install",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = EmeraldGreen,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        is UpdateState.Checking -> {
+                            Text(
+                                text = "Checking for updates...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = "Build ${BuildConfig.VERSION_CODE} • Up to date",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                        }
+                    }
                 }
+            }
 
+            Spacer(modifier = Modifier.width(10.dp))
+
+            when (updateState) {
                 is UpdateState.Available -> {
-                    Surface(
-                        color = EmeraldGreen.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Button(
+                        onClick = onOpenUpdateDialog,
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = "Update Available: ${state.updateInfo.versionName}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = EmeraldGreen,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                state.updateInfo.fileSizeBytes?.let { bytes ->
-                                    val mb = bytes / (1024.0 * 1024.0)
-                                    Text(
-                                        text = String.format(Locale.US, "%.1f MB", mb),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextMuted
-                                    )
-                                }
-                            }
-
-                            if (state.updateInfo.changelog.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = state.updateInfo.changelog,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { viewModel.downloadUpdate(context, state.updateInfo) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Download Update", color = Color.Black, fontWeight = FontWeight.Bold)
-                                }
-
-                                OutlinedButton(
-                                    onClick = { viewModel.dismissUpdate(context) },
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Dismiss", color = TextSecondary)
-                                }
-                            }
-                        }
+                        Text("View Update", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
-
-                is UpdateState.Downloading -> {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = "Downloading ${state.updateInfo.versionName}...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = TextPrimary
-                            )
-                            Text(
-                                text = if (state.progressPercent >= 0) "${state.progressPercent}%" else "...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = PrimaryBlue,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (state.progressPercent >= 0) {
-                            LinearProgressIndicator(
-                                progress = { state.progressPercent / 100f },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = PrimaryBlue,
-                                trackColor = SurfaceDark
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = PrimaryBlue,
-                                trackColor = SurfaceDark
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = { viewModel.cancelUpdateDownload(context) },
-                            colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Cancel Download", color = Color.White)
-                        }
-                    }
-                }
-
                 is UpdateState.ReadyToInstall -> {
-                    Surface(
-                        color = EmeraldGreen.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Button(
+                        onClick = onOpenUpdateDialog,
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldGreen)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Ready to Install: ${state.updateInfo.versionName}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = EmeraldGreen,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Package is downloaded and verified. Tap below to launch Android PackageInstaller.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-
-                            if (!hasInstallPermission) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "⚠️ Unknown sources permission required to install packages outside Google Play.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = AmberWarning
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Button(
-                                    onClick = { AppUpdateEngine.openInstallPermissionSettings(context) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AmberWarning),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Grant Install Permission", color = Color.Black, fontWeight = FontWeight.Bold)
-                                }
-                            } else {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = { viewModel.installUpdate(context, state.apkFile) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Install Now", color = Color.Black, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
+                        Text("Install", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
-
-                is UpdateState.UpToDate -> {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceDark)
-                            .padding(12.dp)
+                is UpdateState.Downloading -> {
+                    Button(
+                        onClick = onOpenUpdateDialog,
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "You are up to date! Latest: ${state.latestVersion}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = TextPrimary
-                        )
+                        Text("Progress", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
-
-                is UpdateState.Error -> {
-                    Surface(
-                        color = AmberWarning.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+                else -> {
+                    OutlinedButton(
+                        onClick = onOpenUpdateDialog,
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(12.dp)
-                        ) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = state.message,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextPrimary
-                            )
-                        }
+                        Text("Updates", color = PrimaryBlue, fontSize = 12.sp)
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Action Buttons
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Button(
-                    onClick = { viewModel.checkForUpdates(context) },
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Check for Updates", color = Color.White)
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        viewModel.simulatePushUpdate(
-                            context = context,
-                            version = "1.1.0",
-                            versionCode = 2,
-                            changelog = "Simulated Push Update:\n- Integrated push update engine\n- Tested push broadcast handler\n- UI update banner"
-                        )
-                        Toast.makeText(context, "Simulated push update dispatched!", Toast.LENGTH_SHORT).show()
-                    },
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp), tint = AccentCyan)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Simulate Push Update", color = AccentCyan)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "ADB: adb shell am broadcast -a com.parktimedetector.action.PUSH_UPDATE --es version \"1.1.0\" --ei versionCode 2 --es downloadUrl \"<url>\"",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextMuted,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-            )
         }
     }
 }

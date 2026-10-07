@@ -63,6 +63,9 @@ object AppUpdateEngine {
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
+    var latestCachedUpdateInfo: AppUpdateInfo? = null
+        private set
+
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -129,6 +132,8 @@ object AppUpdateEngine {
                     return@launch
                 }
 
+                latestCachedUpdateInfo = updateInfo
+
                 val isNewer = VersionComparator.isUpdateAvailable(
                     currentVersion = BuildConfig.VERSION_NAME,
                     currentCode = BuildConfig.VERSION_CODE,
@@ -150,6 +155,7 @@ object AppUpdateEngine {
                         TAG,
                         "App is up to date: ${BuildConfig.VERSION_NAME} >= ${updateInfo.versionName}"
                     )
+                    NotificationHelper.cancelUpdateNotification(context)
                     _updateState.value = UpdateState.UpToDate(updateInfo.versionName)
                 }
             } catch (e: Exception) {
@@ -166,6 +172,62 @@ object AppUpdateEngine {
     }
 
     /**
+     * Checks if any pending update in state has already been installed.
+     * If current installed version is greater than or equal to target version,
+     * immediately resets state to Idle and cancels update notifications.
+     */
+    fun checkOrClearIfInstalled(context: Context): Boolean {
+        val current = _updateState.value
+        val targetInfo = when (current) {
+            is UpdateState.Available -> current.updateInfo
+            is UpdateState.Downloading -> current.updateInfo
+            is UpdateState.ReadyToInstall -> current.updateInfo
+            else -> latestCachedUpdateInfo
+        }
+
+        if (targetInfo != null) {
+            val isStillNewer = VersionComparator.isUpdateAvailable(
+                currentVersion = BuildConfig.VERSION_NAME,
+                currentCode = BuildConfig.VERSION_CODE,
+                targetVersion = targetInfo.versionName,
+                targetCode = targetInfo.versionCode
+            )
+            if (!isStillNewer) {
+                AppLogger.info(
+                    context,
+                    TAG,
+                    "Target update ${targetInfo.versionName} is already installed (current: ${BuildConfig.VERSION_NAME}). Clearing update state."
+                )
+                cancelDownload(context)
+                NotificationHelper.cancelUpdateNotification(context)
+                _updateState.value = UpdateState.Idle
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Returns true if there is an active update in state that is strictly newer
+     * than the currently installed application version.
+     */
+    fun isUpdateActiveAndNewer(): Boolean {
+        val current = _updateState.value
+        val info = when (current) {
+            is UpdateState.Available -> current.updateInfo
+            is UpdateState.Downloading -> current.updateInfo
+            is UpdateState.ReadyToInstall -> current.updateInfo
+            else -> return false
+        }
+        return VersionComparator.isUpdateAvailable(
+            currentVersion = BuildConfig.VERSION_NAME,
+            currentCode = BuildConfig.VERSION_CODE,
+            targetVersion = info.versionName,
+            targetCode = info.versionCode
+        )
+    }
+
+    /**
      * Ingests a push update payload received from a broadcast receiver, remote push, or simulator.
      */
     fun processPushUpdate(
@@ -178,6 +240,8 @@ object AppUpdateEngine {
             TAG,
             "Received push update: version=${updateInfo.versionName}, code=${updateInfo.versionCode}, autoDownload=$autoDownload"
         )
+
+        latestCachedUpdateInfo = updateInfo
 
         val isNewer = VersionComparator.isUpdateAvailable(
             currentVersion = BuildConfig.VERSION_NAME,
@@ -192,6 +256,8 @@ object AppUpdateEngine {
                 TAG,
                 "Push update ignored: version ${updateInfo.versionName} is not newer than current ${BuildConfig.VERSION_NAME}"
             )
+            NotificationHelper.cancelUpdateNotification(context)
+            _updateState.value = UpdateState.Idle
             return
         }
 

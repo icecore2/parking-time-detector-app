@@ -114,6 +114,7 @@ class MainActivity : ComponentActivity() {
         if (com.parktimedetector.audio.AlarmSoundManager.isPlaying.value) {
             com.parktimedetector.audio.AlarmSoundManager.stop(this)
         }
+        viewModel.checkOrClearIfInstalled(this)
     }
 
     override fun onNewIntent(intent: Intent) {

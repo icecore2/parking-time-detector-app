@@ -195,4 +195,129 @@ class UpdateEngineTest {
         val info = AppUpdateInfo.fromGitHubReleaseJson(githubJson)
         assertNull(info)
     }
+
+    @Test
+    fun testIsUpdateAvailable_whenTargetIsAlreadyInstalled_returnsFalse() {
+        // Target version equals currently installed version -> must return false (no update card/badge)
+        assertFalse(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0",
+                currentCode = 1,
+                targetVersion = "1.0",
+                targetCode = 1
+            )
+        )
+
+        // Target version with prefix equals current
+        assertFalse(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0",
+                currentCode = 1,
+                targetVersion = "v1.0",
+                targetCode = 1
+            )
+        )
+
+        // Target version is older than currently installed (downgrade scenario)
+        assertFalse(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "2.0.0",
+                currentCode = 20,
+                targetVersion = "1.9.5",
+                targetCode = 19
+            )
+        )
+
+        // Target versionCode is lower even if versionName string might look higher
+        assertFalse(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0",
+                currentCode = 10,
+                targetVersion = "2.0",
+                targetCode = 9
+            )
+        )
+    }
+
+    @Test
+    fun testIsUpdateAvailable_whenTargetIsStrictlyNewer_returnsTrue() {
+        // Higher versionCode
+        assertTrue(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0",
+                currentCode = 1,
+                targetVersion = "1.0",
+                targetCode = 2
+            )
+        )
+
+        // Same versionCode, newer semantic version
+        assertTrue(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0.0",
+                currentCode = 5,
+                targetVersion = "1.0.1",
+                targetCode = 5
+            )
+        )
+
+        // Newer version without versionCode
+        assertTrue(
+            VersionComparator.isUpdateAvailable(
+                currentVersion = "1.0",
+                currentCode = 1,
+                targetVersion = "1.1",
+                targetCode = null
+            )
+        )
+    }
+
+    @Test
+    fun testPushPayload_triggersClearanceWhenAlreadyInstalled() {
+        // Simulate push update JSON payload
+        val pushJson = JSONObject().apply {
+            put("versionName", "1.0")
+            put("versionCode", 1)
+            put("title", "Push Update")
+            put("changelog", "Bug fixes")
+            put("downloadUrl", "https://example.com/update-1.0.apk")
+            put("fileName", "update-1.0.apk")
+        }
+
+        val pushInfo = AppUpdateInfo.fromJson(pushJson)
+
+        // When current installed is 1.0 (code 1), push update should NOT be active
+        val shouldShowCard = VersionComparator.isUpdateAvailable(
+            currentVersion = "1.0",
+            currentCode = 1,
+            targetVersion = pushInfo.versionName,
+            targetCode = pushInfo.versionCode
+        )
+
+        // Verifies the card/badge will NOT show when target version is already installed
+        assertFalse("Update card must not show if version is already installed", shouldShowCard)
+    }
+
+    @Test
+    fun testPushPayload_activatesWhenNewerVersionPushed() {
+        val pushJson = JSONObject().apply {
+            put("versionName", "1.1.0")
+            put("versionCode", 2)
+            put("title", "New Release")
+            put("changelog", "Added background parking timer updates")
+            put("downloadUrl", "https://example.com/update-1.1.0.apk")
+            put("fileName", "update-1.1.0.apk")
+        }
+
+        val pushInfo = AppUpdateInfo.fromJson(pushJson)
+
+        val shouldShowCard = VersionComparator.isUpdateAvailable(
+            currentVersion = "1.0.0",
+            currentCode = 1,
+            targetVersion = pushInfo.versionName,
+            targetCode = pushInfo.versionCode
+        )
+
+        assertTrue("Update card must show when newer version is pushed", shouldShowCard)
+    }
 }
