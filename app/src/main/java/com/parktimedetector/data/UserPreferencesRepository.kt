@@ -41,6 +41,17 @@ enum class OverlayDialogPosition(val title: String, val description: String) {
     )
 }
 
+enum class OverlayPresentationMode(val title: String, val description: String) {
+    BUBBLE(
+        "Floating Bubble (Default)",
+        "Starts minimized as an unobtrusive, draggable floating bubble showing live zone and meter time. Tap anytime to expand."
+    ),
+    EXPANDED_DIALOG(
+        "Expanded Dialog Card",
+        "Immediately displays the full confirmation dialog card over the screen with start and stop action buttons."
+    )
+}
+
 enum class AppThemeMode(val title: String) {
     SYSTEM("Follow System"),
     LIGHT("Light Mode"),
@@ -62,6 +73,7 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_REQUIRE_APPROVAL = booleanPreferencesKey("require_approval_before_start")
         val KEY_SHOW_CONFIRMATION_DIALOGS = booleanPreferencesKey("show_confirmation_dialogs")
         val KEY_OVERLAY_DIALOG_POSITION = stringPreferencesKey("overlay_dialog_position")
+        val KEY_OVERLAY_PRESENTATION_MODE = stringPreferencesKey("overlay_presentation_mode")
         val KEY_LOCKSCREEN_OVERLAY_POLICY = stringPreferencesKey("lockscreen_overlay_policy")
         val KEY_DISMISS_OVERLAY_ON_SCREEN_OFF = booleanPreferencesKey("dismiss_overlay_on_screen_off")
         val KEY_ALWAYS_DETECT = booleanPreferencesKey("always_detect")
@@ -145,6 +157,15 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    val overlayPresentationMode: Flow<OverlayPresentationMode> = context.dataStore.data.map { preferences ->
+        val raw = preferences[KEY_OVERLAY_PRESENTATION_MODE]
+        try {
+            if (raw != null) OverlayPresentationMode.valueOf(raw) else OverlayPresentationMode.BUBBLE
+        } catch (_: Exception) {
+            OverlayPresentationMode.BUBBLE
+        }
+    }
+
     val dismissOverlayOnScreenOff: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_DISMISS_OVERLAY_ON_SCREEN_OFF] ?: true
     }
@@ -200,6 +221,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setOverlayDialogPosition(position: OverlayDialogPosition) {
         context.dataStore.edit { preferences ->
             preferences[KEY_OVERLAY_DIALOG_POSITION] = position.name
+        }
+    }
+
+    suspend fun setOverlayPresentationMode(mode: OverlayPresentationMode) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_OVERLAY_PRESENTATION_MODE] = mode.name
         }
     }
 

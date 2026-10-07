@@ -859,6 +859,7 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 }
                 val policy = prefsRepo.lockScreenOverlayPolicy.first()
                 val dialogPosition = prefsRepo.overlayDialogPosition.first()
+                val overlayPresentationMode = prefsRepo.overlayPresentationMode.first()
                 if (!OverlayPrivacyManager.canShowOverlay(applicationContext, policy)) {
                     Log.i(TAG, "Floating overlay suppressed on lock screen per policy ($policy)")
                     return@launch
@@ -894,8 +895,13 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                             return@post
                         }
 
+                        val previousX = currentOverlayParams?.x
+                        val previousY = currentOverlayParams?.y
+                        val targetBubbleMode = if (overlayView != null) isBubbleMode else (overlayPresentationMode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+
                         hideOverlayInternal()
                         isStopOverlay = false
+                        isBubbleMode = targetBubbleMode
 
                         val inflater = LayoutInflater.from(this@ParkingAccessibilityService)
                         val view = inflater.inflate(R.layout.dialog_parking_detection_overlay, null)
@@ -941,23 +947,40 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                         val screenWidth = screenMetrics.widthPixels
                         val screenHeight = screenMetrics.heightPixels
                         val cardWidth = Math.min(screenWidth - dpToPx(32), dpToPx(380))
+                        val bubbleWidth = dpToPx(76)
+
+                        val initialWidth = if (isBubbleMode) bubbleWidth else cardWidth
+                        val initialX = previousX ?: if (isBubbleMode) {
+                            (screenWidth - dpToPx(88)).coerceAtLeast(0)
+                        } else {
+                            (screenWidth - cardWidth) / 2
+                        }
+                        val initialY = previousY ?: if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                            if (isBubbleMode) (screenHeight - dpToPx(120)) / 2 else (screenHeight - dpToPx(320)) / 2
+                        } else {
+                            if (isBubbleMode) dpToPx(64) else dpToPx(48)
+                        }
 
                         val params = WindowManager.LayoutParams(
-                            cardWidth,
+                            initialWidth,
                             WindowManager.LayoutParams.WRAP_CONTENT,
                             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                             PixelFormat.TRANSLUCENT
                         ).apply {
                             gravity = Gravity.TOP or Gravity.START
-                            x = (screenWidth - cardWidth) / 2
-                            y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
-                                (screenHeight - dpToPx(320)) / 2
-                            } else {
-                                dpToPx(48)
-                            }
+                            x = initialX
+                            y = initialY
                         }
                         currentOverlayParams = params
+
+                        if (isBubbleMode) {
+                            layoutCard?.visibility = View.GONE
+                            layoutBubble?.visibility = View.VISIBLE
+                        } else {
+                            layoutCard?.visibility = View.VISIBLE
+                            layoutBubble?.visibility = View.GONE
+                        }
 
                         // Make dialog card draggable via drag handle and header
                         if (viewDragHandle != null) {
@@ -972,9 +995,14 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                             isBubbleMode = true
                             layoutCard?.visibility = View.GONE
                             layoutBubble?.visibility = View.VISIBLE
-                            params.width = dpToPx(76)
+                            params.width = bubbleWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - dpToPx(88)).coerceAtLeast(0)
+                            params.y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                                (screenHeight - dpToPx(120)) / 2
+                            } else {
+                                dpToPx(64)
+                            }
                             currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
@@ -994,6 +1022,11 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                             params.width = cardWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - cardWidth) / 2
+                            params.y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                                (screenHeight - dpToPx(320)) / 2
+                            } else {
+                                dpToPx(48)
+                            }
                             currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
@@ -1011,6 +1044,22 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         wm.addView(view, params)
                         overlayView = view
+
+                        if (isBubbleMode) {
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_SHOWN",
+                                message = "[FLOW: BUBBLE] Parking detection presented as default bubble: ${detection.zoneOrLot ?: "Active"}",
+                                packageName = detection.packageName
+                            )
+                        } else {
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "DIALOG_SHOWN",
+                                message = "[FLOW: DIALOG] Detection dialog opened: ${detection.zoneOrLot ?: "Active"}",
+                                packageName = detection.packageName
+                            )
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error displaying accessibility overlay dialog", e)
                     }
@@ -1032,6 +1081,7 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 }
                 val policy = prefsRepo.lockScreenOverlayPolicy.first()
                 val dialogPosition = prefsRepo.overlayDialogPosition.first()
+                val overlayPresentationMode = prefsRepo.overlayPresentationMode.first()
                 if (!OverlayPrivacyManager.canShowOverlay(applicationContext, policy)) {
                     Log.i(TAG, "Floating stop overlay suppressed on lock screen per policy ($policy)")
                     return@launch
@@ -1068,11 +1118,11 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         val previousX = currentOverlayParams?.x
                         val previousY = currentOverlayParams?.y
-                        val wasInBubbleMode = isBubbleMode
+                        val targetBubbleMode = if (overlayView != null) isBubbleMode else (overlayPresentationMode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
 
                         hideOverlayInternal()
                         isStopOverlay = true
-                        isBubbleMode = wasInBubbleMode
+                        isBubbleMode = targetBubbleMode
 
                         val inflater = LayoutInflater.from(this@ParkingAccessibilityService)
                         val view = inflater.inflate(R.layout.dialog_parking_stop_overlay, null)
@@ -1118,25 +1168,30 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                         val screenWidth = screenMetrics.widthPixels
                         val screenHeight = screenMetrics.heightPixels
                         val cardWidth = Math.min(screenWidth - dpToPx(32), dpToPx(380))
+                        val bubbleWidth = dpToPx(76)
+
+                        val initialWidth = if (isBubbleMode) bubbleWidth else cardWidth
+                        val initialX = previousX ?: if (isBubbleMode) (screenWidth - dpToPx(88)).coerceAtLeast(0) else (screenWidth - cardWidth) / 2
+                        val initialY = previousY ?: if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                            if (isBubbleMode) (screenHeight - dpToPx(120)) / 2 else (screenHeight - dpToPx(320)) / 2
+                        } else {
+                            if (isBubbleMode) dpToPx(64) else dpToPx(48)
+                        }
 
                         val params = WindowManager.LayoutParams(
-                            if (wasInBubbleMode) dpToPx(76) else cardWidth,
+                            initialWidth,
                             WindowManager.LayoutParams.WRAP_CONTENT,
                             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                             PixelFormat.TRANSLUCENT
                         ).apply {
                             gravity = Gravity.TOP or Gravity.START
-                            x = previousX ?: if (wasInBubbleMode) (screenWidth - dpToPx(88)).coerceAtLeast(0) else (screenWidth - cardWidth) / 2
-                            y = previousY ?: if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
-                                (screenHeight - dpToPx(320)) / 2
-                            } else {
-                                dpToPx(48)
-                            }
+                            x = initialX
+                            y = initialY
                         }
                         currentOverlayParams = params
 
-                        if (wasInBubbleMode) {
+                        if (isBubbleMode) {
                             layoutCard?.visibility = View.GONE
                             layoutBubble?.visibility = View.VISIBLE
                         } else {
@@ -1157,13 +1212,23 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                             isBubbleMode = true
                             layoutCard?.visibility = View.GONE
                             layoutBubble?.visibility = View.VISIBLE
-                            params.width = dpToPx(76)
+                            params.width = bubbleWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - dpToPx(88)).coerceAtLeast(0)
+                            params.y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                                (screenHeight - dpToPx(120)) / 2
+                            } else {
+                                dpToPx(64)
+                            }
                             currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_STOP_COLLAPSED",
+                                message = "[FLOW: BUBBLE] Stop detection dialog minimized to bubble"
+                            )
                         }
 
                         // Expand from bubble mode
@@ -1174,10 +1239,20 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                             params.width = cardWidth
                             params.height = WindowManager.LayoutParams.WRAP_CONTENT
                             params.x = (screenWidth - cardWidth) / 2
+                            params.y = if (dialogPosition == com.parktimedetector.data.OverlayDialogPosition.CENTER) {
+                                (screenHeight - dpToPx(320)) / 2
+                            } else {
+                                dpToPx(48)
+                            }
                             currentOverlayParams = params
                             try {
                                 wm.updateViewLayout(view, params)
                             } catch (_: Exception) {}
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_STOP_EXPANDED",
+                                message = "[FLOW: BUBBLE] Stop bubble expanded to dialog"
+                            )
                         }
 
                         if (layoutBubble != null) {
@@ -1186,6 +1261,22 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
 
                         wm.addView(view, params)
                         overlayView = view
+
+                        if (isBubbleMode) {
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "BUBBLE_STOP_SHOWN",
+                                message = "[FLOW: BUBBLE] Parking stop detection presented as default bubble: ${detection.zoneOrLot ?: "Stopped"}",
+                                packageName = detection.packageName
+                            )
+                        } else {
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "DIALOG_STOP_SHOWN",
+                                message = "[FLOW: DIALOG] Stop detection dialog opened: ${detection.zoneOrLot ?: "Stopped"}",
+                                packageName = detection.packageName
+                            )
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error displaying stop accessibility overlay dialog", e)
                     }

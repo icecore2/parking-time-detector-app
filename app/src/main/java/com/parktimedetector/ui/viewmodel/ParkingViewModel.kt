@@ -58,6 +58,9 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     val overlayDialogPosition: StateFlow<com.parktimedetector.data.OverlayDialogPosition> = prefsRepo.overlayDialogPosition
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.data.OverlayDialogPosition.TOP)
 
+    val overlayPresentationMode: StateFlow<com.parktimedetector.data.OverlayPresentationMode> = prefsRepo.overlayPresentationMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+
     val lockScreenOverlayPolicy: StateFlow<com.parktimedetector.data.LockScreenOverlayPolicy> = prefsRepo.lockScreenOverlayPolicy
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.parktimedetector.data.LockScreenOverlayPolicy.FOLLOW_SYSTEM)
 
@@ -425,6 +428,13 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             prefsRepo.setOverlayDialogPosition(position)
             com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Overlay dialog position set to: ${position.name}")
+        }
+    }
+
+    fun setOverlayPresentationMode(mode: com.parktimedetector.data.OverlayPresentationMode) {
+        viewModelScope.launch {
+            prefsRepo.setOverlayPresentationMode(mode)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Overlay presentation mode set to: ${mode.name}")
         }
     }
 

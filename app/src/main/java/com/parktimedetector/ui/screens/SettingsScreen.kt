@@ -1261,6 +1261,7 @@ fun SettingsScreen(
         val requireApproval by viewModel.requireApproval.collectAsState()
         val showConfirmationDialogs by viewModel.showConfirmationDialogs.collectAsState()
         val overlayDialogPosition by viewModel.overlayDialogPosition.collectAsState()
+        val overlayPresentationMode by viewModel.overlayPresentationMode.collectAsState()
         val notificationManager = remember { context.getSystemService(android.app.NotificationManager::class.java) }
         var areNotificationsEnabled by remember { mutableStateOf(notificationManager?.areNotificationsEnabled() ?: true) }
 
@@ -1517,7 +1518,54 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(
-                                text = "Dialog Placement",
+                                text = "Initial Detection Presentation",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Choose how new parking and stop detections are presented on screen.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            com.parktimedetector.data.OverlayPresentationMode.values().forEach { mode ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { viewModel.setOverlayPresentationMode(mode) }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    androidx.compose.material3.RadioButton(
+                                        selected = overlayPresentationMode == mode,
+                                        onClick = { viewModel.setOverlayPresentationMode(mode) },
+                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                            selectedColor = EmeraldGreen
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Column {
+                                        Text(
+                                            text = mode.title,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = if (overlayPresentationMode == mode) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (overlayPresentationMode == mode) TextPrimary else TextSecondary
+                                        )
+                                        Text(
+                                            text = mode.description,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextSecondary
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "Dialog Placement (When Expanded)",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
                                 color = TextPrimary

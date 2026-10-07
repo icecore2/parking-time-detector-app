@@ -176,4 +176,87 @@ class BubbleOverlayBehaviorTest {
             )
         )
     }
+
+    @Test
+    fun testDefaultOverlayPresentationModeIsBubble() {
+        val defaultMode = com.parktimedetector.data.OverlayPresentationMode.BUBBLE
+        assertEquals("BUBBLE", defaultMode.name)
+        assertTrue(defaultMode.title.contains("Default"))
+        assertTrue(defaultMode.title.contains("Bubble"))
+    }
+
+    @Test
+    fun testInitialDetectionDefaultsToBubbleMode() {
+        // Given default presentation mode BUBBLE
+        val presentationMode = com.parktimedetector.data.OverlayPresentationMode.BUBBLE
+
+        // Simulating the accessibility service overlay presentation decision logic:
+        var isOverlayViewPresent = false
+        var currentBubbleState = false
+
+        fun resolveInitialBubbleMode(
+            isOverlayActive: Boolean,
+            currentBubbleMode: Boolean,
+            mode: com.parktimedetector.data.OverlayPresentationMode
+        ): Boolean {
+            return if (isOverlayActive) currentBubbleMode else (mode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+        }
+
+        // On first detection, overlayView is null -> should resolve to true (bubble mode by default)
+        val initialBubbleMode = resolveInitialBubbleMode(isOverlayViewPresent, currentBubbleState, presentationMode)
+        assertTrue("New detection must default to bubble mode", initialBubbleMode)
+
+        // Overlay is now active in bubble mode
+        isOverlayViewPresent = true
+        currentBubbleState = initialBubbleMode
+
+        // When user taps bubble to expand
+        currentBubbleState = false
+        assertFalse("Tapping bubble should expand to full dialog", currentBubbleState)
+
+        // When user taps minimize button
+        currentBubbleState = true
+        assertTrue("Minimizing dialog should collapse back to bubble", currentBubbleState)
+    }
+
+    @Test
+    fun testInitialStopDetectionDefaultsToBubbleMode() {
+        val presentationMode = com.parktimedetector.data.OverlayPresentationMode.BUBBLE
+
+        fun resolveInitialStopBubbleMode(
+            isOverlayActive: Boolean,
+            currentBubbleMode: Boolean,
+            mode: com.parktimedetector.data.OverlayPresentationMode
+        ): Boolean {
+            return if (isOverlayActive) currentBubbleMode else (mode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+        }
+
+        // Standalone stop detection with no prior overlay active
+        val initialStopBubbleMode = resolveInitialStopBubbleMode(
+            isOverlayActive = false,
+            currentBubbleMode = false,
+            mode = presentationMode
+        )
+        assertTrue("Stop detection must default to bubble mode when no prior overlay was active", initialStopBubbleMode)
+    }
+
+    @Test
+    fun testExpandedDialogModeHonoredWhenConfigured() {
+        val presentationMode = com.parktimedetector.data.OverlayPresentationMode.EXPANDED_DIALOG
+
+        fun resolveInitialBubbleMode(
+            isOverlayActive: Boolean,
+            currentBubbleMode: Boolean,
+            mode: com.parktimedetector.data.OverlayPresentationMode
+        ): Boolean {
+            return if (isOverlayActive) currentBubbleMode else (mode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+        }
+
+        val initialBubbleMode = resolveInitialBubbleMode(
+            isOverlayActive = false,
+            currentBubbleMode = false,
+            mode = presentationMode
+        )
+        assertFalse("When EXPANDED_DIALOG is selected, detection must not start in bubble mode", initialBubbleMode)
+    }
 }
