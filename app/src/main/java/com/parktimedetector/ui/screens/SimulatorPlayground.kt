@@ -688,6 +688,27 @@ fun SimulatorPlaygroundContent(
                 ) {
                     Text("🪟 Test Lock Screen Overlay Dialog", color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
                 }
+
+                Button(
+                    onClick = {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:" + context.packageName)
+                            ).apply { addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK) }
+                            context.startActivity(intent)
+                            Toast.makeText(context, "Please grant 'Draw over other apps' permission", Toast.LENGTH_LONG).show()
+                        } else {
+                            viewModel.showFloatingZonesOverlay(context)
+                            Toast.makeText(context, "Floating Cheapest Zones overlay launched!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("🏷️ Show Floating Cheapest Zones List", color = DarkNavy, fontWeight = FontWeight.Bold)
+                }
             }
         }
 

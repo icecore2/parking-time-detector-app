@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.parktimedetector.network.ZoneWithPrice
 import com.parktimedetector.network.CostDuration
 import com.parktimedetector.network.MyParkingApiClient
 import com.parktimedetector.network.ParkingMapPin
@@ -111,6 +112,11 @@ fun MockMyParkingApp(
     // Live fetched zone details
     var activeZoneDetails by remember { mutableStateOf<ParkingZoneDetails?>(null) }
     var isLoadingDetails by remember { mutableStateOf(false) }
+
+    // Nearby zones sorted by cheapest price
+    var nearbyCheapestZones by remember { mutableStateOf<List<ZoneWithPrice>>(emptyList()) }
+    var showCheapestList by remember { mutableStateOf(false) }
+    var isLoadingCheapest by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
@@ -393,7 +399,155 @@ fun MockMyParkingApp(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Button to toggle Cheapest Zones list
+                    Button(
+                        onClick = {
+                            showCheapestList = !showCheapestList
+                            if (showCheapestList && nearbyCheapestZones.isEmpty()) {
+                                scope.launch {
+                                    isLoadingCheapest = true
+                                    nearbyCheapestZones = MyParkingApiClient.fetchNearbyZonesWithPrices(51.0486, -114.0708)
+                                    isLoadingCheapest = false
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = if (showCheapestList) EmeraldGreen else Color(0xFF1E293B)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (showCheapestList) "Hide Cheapest Zones Nearby ✕" else "🏷️ Show Cheapest Zones Nearby",
+                                color = if (showCheapestList) DarkNavy else EmeraldGreen,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            if (isLoadingCheapest) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = if (showCheapestList) DarkNavy else EmeraldGreen
+                                )
+                            }
+                        }
+                    }
+
+                    // Collapsible list of Cheapest Zones
+                    if (showCheapestList) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF162032)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Nearby Parking Zones (Cheapest First)",
+                                    color = EmeraldGreen,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(nearbyCheapestZones) { zone ->
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = SurfaceDark,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedZoneNumber = zone.zoneNumber
+                                                    selectedLot = zone.address
+                                                    selectedDurationMinutes = zone.maxTimeMinutes ?: 120
+                                                    selectedRateText = zone.cheapestPrice.displayPrice
+                                                    onPinPressed(
+                                                        ParkingMapPin(
+                                                            zoneNumber = zone.zoneNumber,
+                                                            title = "Zone ${zone.zoneNumber}",
+                                                            subtitle = zone.address,
+                                                            latitude = 51.0486,
+                                                            longitude = -114.0708
+                                                        )
+                                                    )
+                                                }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Text(
+                                                            text = "Zone ${zone.zoneNumber}",
+                                                            color = Color.White,
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 12.sp
+                                                        )
+                                                        if (zone.cheapestPrice.isFree) {
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = EmeraldGreen
+                                                            ) {
+                                                                Text(
+                                                                    text = "FREE",
+                                                                    color = DarkNavy,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    fontSize = 9.sp,
+                                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = zone.address,
+                                                        color = TextSecondary,
+                                                        fontSize = 10.sp,
+                                                        maxLines = 1
+                                                    )
+                                                    Text(
+                                                        text = "${zone.stallType ?: "Parallel"} • Max ${zone.maxTimeMinutes ?: 120}m",
+                                                        color = TextPrimary.copy(alpha = 0.6f),
+                                                        fontSize = 9.sp
+                                                    )
+                                                }
+
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = if (zone.cheapestPrice.isFree) EmeraldGreen else PrimaryBlue
+                                                ) {
+                                                    Text(
+                                                        text = zone.cheapestPrice.displayPrice,
+                                                        color = DarkNavy,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 11.sp,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // Real EditText with accessibility label for Quick-Renew search
                     OutlinedTextField(

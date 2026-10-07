@@ -955,4 +955,29 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     fun disarmQuickRenew() {
         com.parktimedetector.service.QuickRenewManager.disarm()
     }
+
+    fun showFloatingZonesOverlay(context: Context, lat: Double = 51.0486, lng: Double = -114.0708) {
+        com.parktimedetector.service.FloatingZonesOverlayService.onZoneSelectedCallback = { zone ->
+            // Launch simulated mock or direct session on user selection
+            val maxMins = (zone.maxTimeMinutes ?: 120).coerceAtLeast(30)
+            launchMockApp(
+                context = context,
+                isMyParking = true,
+                session = ParkingSession(
+                    packageName = NotificationHelper.MYPARKING_PACKAGE,
+                    source = "Cheapest Zones Overlay",
+                    zoneOrLot = "Zone ${zone.zoneNumber}",
+                    locationAddress = zone.address,
+                    startTimeMillis = System.currentTimeMillis(),
+                    endTimeMillis = System.currentTimeMillis() + (maxMins * 60 * 1000L),
+                    advanceWarningMinutes = 15
+                )
+            )
+        }
+        com.parktimedetector.service.FloatingZonesOverlayService.show(context, lat, lng)
+    }
+
+    fun hideFloatingZonesOverlay() {
+        com.parktimedetector.service.FloatingZonesOverlayService.hide()
+    }
 }
