@@ -537,6 +537,17 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun shareLogsQuick(context: Context) {
+        shareLogs(
+            context = context,
+            hasNotifPermission = com.parktimedetector.service.ParkingNotificationListenerService.isPermissionGranted(context),
+            isNotifConnected = isServiceConnected.value,
+            hasAccessibilityPermission = com.parktimedetector.service.ParkingAccessibilityService.isAccessibilityServiceEnabled(context),
+            isAccessibilityConnected = isAccessibilityConnected.value,
+            logAllNotifications = logAllNotifications.value
+        )
+    }
+
     fun reconnectService(context: Context) {
         com.parktimedetector.service.ParkingNotificationListenerService.requestRebindService(context)
     }
@@ -944,32 +955,19 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             }
             openTargetApp(context, resolvedPkg)
         } else {
-            // Target app is not installed: Launch simulated mock app to test & validate Quick-Renew!
-            launchMockApp(context, isMyParking, session)
+            // Target app is not installed: Delegate to DebugBridge
+            launchMockApp(context, isMyParking, session, resolvedPkg)
         }
     }
 
-    fun launchMockApp(context: Context, isMyParking: Boolean, session: ParkingSession? = null) {
-        val targetClass = if (isMyParking) {
-            com.parktimedetector.mock.MockMyParkingActivity::class.java
-        } else {
-            com.parktimedetector.mock.MockParkedInActivity::class.java
-        }
-
-        if (enableQuickRenewAutomation.value) {
-            com.parktimedetector.service.QuickRenewManager.arm(
-                context = context,
-                packageName = context.packageName,
-                zoneOrLot = session?.zoneOrLot ?: (if (isMyParking) "Lot 58 - 935 - 4 Av SW" else "Zone 4022"),
-                locationAddress = session?.locationAddress,
-                appType = if (isMyParking) com.parktimedetector.service.RenewAppType.MYPARKING else com.parktimedetector.service.RenewAppType.PARKEDIN
-            )
-        }
-
-        val intent = Intent(context, targetClass).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(intent)
+    fun launchMockApp(context: Context, isMyParking: Boolean, session: ParkingSession? = null, targetPkg: String? = null) {
+        val resolvedPkg = targetPkg ?: if (isMyParking) NotificationHelper.MYPARKING_PACKAGE else NotificationHelper.PARKEDIN_PACKAGE
+        com.parktimedetector.debug.DebugBridgeProvider.bridge.handleMissingParkingApp(
+            context = context,
+            isMyParking = isMyParking,
+            session = session,
+            targetPackage = resolvedPkg
+        )
     }
 
     fun disarmQuickRenew() {

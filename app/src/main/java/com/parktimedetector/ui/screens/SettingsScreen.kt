@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -2079,37 +2080,44 @@ fun SettingsScreen(
             }
         }
 
-        // 4. In-App Simulator Tool
+        // 4. Diagnostics & Troubleshooting (For all users to export logs / report issues)
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = CardBackground),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PrimaryBlue)
+                    Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryBlue)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Test & Detection Simulator",
+                        text = "Diagnostics & Troubleshooting",
                         style = MaterialTheme.typography.titleLarge,
                         color = TextPrimary
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Verify notification detection, live screen text inspection, countdowns, and alarms right now without needing an active parking session.",
+                    text = "If you encounter parking detection issues or want to submit logs to support, you can export a secure diagnostic report containing recent event logs and service status.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextSecondary
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                SimulatorPlaygroundContent(
-                    viewModel = viewModel,
+                OutlinedButton(
+                    onClick = {
+                        viewModel.shareLogsQuick(context)
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    enableScroll = false
-                )
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Export Diagnostic Report", color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
+                }
             }
+        }
+
+        // 5. In-App Simulator Tool (Debug Builds Only)
+        if (com.parktimedetector.debug.DebugBridgeProvider.bridge.hasSimulator) {
+            com.parktimedetector.debug.DebugBridgeProvider.bridge.SettingsSimulatorCard(viewModel = viewModel)
         }
 
         Spacer(modifier = Modifier.height(16.dp))

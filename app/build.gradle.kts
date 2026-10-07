@@ -35,6 +35,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             val keystorePath = System.getenv("KEYSTORE_FILE")
             if (!keystorePath.isNullOrEmpty() && file(keystorePath).exists()) {
@@ -49,6 +53,8 @@ android {
             )
         }
     }
+
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -118,3 +124,17 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+tasks.register<Copy>("packageApks") {
+    dependsOn("assembleDebug", "assembleRelease")
+    into(layout.buildDirectory.dir("outputs/apk-dist"))
+    from(layout.buildDirectory.dir("outputs/apk/debug")) {
+        include("*.apk")
+        rename { "ParkingTimeDetector-v${android.defaultConfig.versionName}-debug.apk" }
+    }
+    from(layout.buildDirectory.dir("outputs/apk/release")) {
+        include("*.apk")
+        rename { "ParkingTimeDetector-v${android.defaultConfig.versionName}-release.apk" }
+    }
+}
+

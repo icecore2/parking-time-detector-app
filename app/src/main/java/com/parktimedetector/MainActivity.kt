@@ -52,9 +52,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import com.parktimedetector.debug.DebugBridgeProvider
 import com.parktimedetector.ui.screens.HistoryScreen
 import com.parktimedetector.ui.screens.HomeScreen
-import com.parktimedetector.ui.screens.LogsScreen
 import com.parktimedetector.ui.screens.SettingsScreen
 import com.parktimedetector.ui.theme.DarkNavy
 import com.parktimedetector.ui.theme.ParkingTimeDetectorTheme
@@ -162,8 +162,8 @@ fun MainAppContent(viewModel: ParkingViewModel) {
         }
     }
 
-    if (showSimulatorSheet) {
-        com.parktimedetector.ui.screens.SimulatorBottomSheet(
+    if (showSimulatorSheet && DebugBridgeProvider.bridge.hasSimulator) {
+        DebugBridgeProvider.bridge.SimulatorSheet(
             viewModel = viewModel,
             onDismiss = { showSimulatorSheet = false }
         )
@@ -199,32 +199,11 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                         )
                     }
 
-                    // Simulator Quick Launch Button
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .clickable { showSimulatorSheet = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.BugReport,
-                                contentDescription = "Open Simulator",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Simulator",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.labelMedium
-                            )
-                        }
+                    // Simulator Quick Launch Button (Debug Only)
+                    if (DebugBridgeProvider.bridge.hasSimulator) {
+                        DebugBridgeProvider.bridge.SimulatorTopBarButton(
+                            onOpenSimulator = { showSimulatorSheet = true }
+                        )
                     }
                 }
             }
@@ -255,13 +234,15 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                     label = { Text("History") },
                     colors = navBarItemColors
                 )
-                NavigationBarItem(
-                    selected = currentTab == ScreenTab.LOGS,
-                    onClick = { currentTab = ScreenTab.LOGS },
-                    icon = { Icon(Icons.Default.BugReport, contentDescription = "Logs") },
-                    label = { Text("Logs") },
-                    colors = navBarItemColors
-                )
+                if (DebugBridgeProvider.bridge.showLogsTab) {
+                    NavigationBarItem(
+                        selected = currentTab == ScreenTab.LOGS,
+                        onClick = { currentTab = ScreenTab.LOGS },
+                        icon = { Icon(Icons.Default.BugReport, contentDescription = "Logs") },
+                        label = { Text("Logs") },
+                        colors = navBarItemColors
+                    )
+                }
                 NavigationBarItem(
                     selected = currentTab == ScreenTab.SETTINGS,
                     onClick = { currentTab = ScreenTab.SETTINGS },
@@ -297,14 +278,20 @@ fun MainAppContent(viewModel: ParkingViewModel) {
                 sessions = sessionHistory,
                 modifier = Modifier.padding(innerPadding)
             )
-            ScreenTab.LOGS -> LogsScreen(
-                viewModel = viewModel,
-                logs = logs,
-                isNotificationServiceConnected = isServiceConnected,
-                isAccessibilityConnected = isAccessibilityConnected,
-                logAllNotifications = logAllNotifications,
-                modifier = Modifier.padding(innerPadding)
-            )
+            ScreenTab.LOGS -> {
+                if (DebugBridgeProvider.bridge.showLogsTab) {
+                    DebugBridgeProvider.bridge.RenderLogsScreen(
+                        viewModel = viewModel,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                } else {
+                    HomeScreen(
+                        viewModel = viewModel,
+                        activeSession = activeSession,
+                        modifier = Modifier.padding(innerPadding)
+                    )
+                }
+            }
             ScreenTab.SETTINGS -> SettingsScreen(
                 viewModel = viewModel,
                 advanceWarningMinutes = advanceWarningMinutes,

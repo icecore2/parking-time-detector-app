@@ -45,18 +45,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Mock Parking Apps for Testing Quick-Renew Automation Sandbox -->
-        <activity
-            android:name=".mock.MockMyParkingActivity"
-            android:exported="true"
-            android:label="Mock MyParking"
-            android:theme="@style/Theme.ParkingTimeDetector" />
-
-        <activity
-            android:name=".mock.MockParkedInActivity"
-            android:exported="true"
-            android:label="Mock ParkedIn"
-            android:theme="@style/Theme.ParkingTimeDetector" />
 
         <!-- Notification Listener Service to catch parking notifications -->
         <service
@@ -110,15 +98,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- Broadcast Receiver for Local Testing & Emulator Simulation via ADB -->
-        <receiver
-            android:name=".receiver.SimulationReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.parktimedetector.action.SIMULATE" />
-                <action android:name="com.parktimedetector.SIMULATE" />
-            </intent-filter>
-        </receiver>
 
         <!-- Broadcast Receiver for Receiving Push Updates & Checking Updates -->
         <receiver

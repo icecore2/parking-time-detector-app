@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <!-- Mock Parking Apps for Testing Quick-Renew Automation Sandbox (Debug Only) -->
+        <activity
+            android:name=".mock.MockMyParkingActivity"
+            android:exported="true"
+            android:label="Mock MyParking"
+            android:theme="@style/Theme.ParkingTimeDetector" />
+
+        <activity
+            android:name=".mock.MockParkedInActivity"
+            android:exported="true"
+            android:label="Mock ParkedIn"
+            android:theme="@style/Theme.ParkingTimeDetector" />
+
+        <!-- Broadcast Receiver for Local Testing & Emulator Simulation via ADB (Debug Only) -->
+        <receiver
+            android:name=".receiver.SimulationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.parktimedetector.action.SIMULATE" />
+                <action android:name="com.parktimedetector.SIMULATE" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>
