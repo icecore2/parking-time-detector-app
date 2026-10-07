@@ -64,6 +64,9 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
     val dismissOverlayOnScreenOff: StateFlow<Boolean> = prefsRepo.dismissOverlayOnScreenOff
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val autoShowFloatingRatesOnMap: StateFlow<Boolean> = prefsRepo.autoShowFloatingRatesOnMap
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     val logAllNotifications: StateFlow<Boolean> = prefsRepo.logAllNotifications
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
@@ -225,6 +228,13 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             prefsRepo.setShowConfirmationDialogs(enabled)
             com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Confirmation dialog windows set to: $enabled")
+        }
+    }
+
+    fun toggleAutoShowFloatingRatesOnMap(enabled: Boolean) {
+        viewModelScope.launch {
+            prefsRepo.setAutoShowFloatingRatesOnMap(enabled)
+            com.parktimedetector.data.AppLogger.info(getApplication(), "SETTINGS", "Auto-show floating rates on map set to: $enabled")
         }
     }
 
@@ -979,5 +989,52 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
 
     fun hideFloatingZonesOverlay() {
         com.parktimedetector.service.FloatingZonesOverlayService.hide()
+    }
+
+    // App Update Engine Integration
+    val updateState: StateFlow<com.parktimedetector.update.UpdateState> =
+        com.parktimedetector.update.AppUpdateEngine.updateState
+
+    fun checkForUpdates(context: Context, silent: Boolean = false) {
+        com.parktimedetector.update.AppUpdateEngine.checkForUpdates(context, silent = silent)
+    }
+
+    fun downloadUpdate(context: Context, updateInfo: com.parktimedetector.update.AppUpdateInfo) {
+        com.parktimedetector.update.AppUpdateEngine.downloadUpdate(context, updateInfo)
+    }
+
+    fun cancelUpdateDownload(context: Context) {
+        com.parktimedetector.update.AppUpdateEngine.cancelDownload(context)
+    }
+
+    fun installUpdate(context: Context, apkFile: java.io.File) {
+        com.parktimedetector.update.AppUpdateEngine.installUpdate(context, apkFile)
+    }
+
+    fun dismissUpdate(context: Context? = null) {
+        com.parktimedetector.update.AppUpdateEngine.dismissUpdate(context)
+    }
+
+    fun simulatePushUpdate(
+        context: Context,
+        version: String = "1.1.0",
+        versionCode: Int = 2,
+        downloadUrl: String = "https://github.com/icecore2/parking-time-detector-app/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0.apk",
+        changelog: String = "Simulated push update:\n- Added update engine\n- Performance enhancements",
+        autoDownload: Boolean = false
+    ) {
+        val info = com.parktimedetector.update.AppUpdateInfo(
+            versionName = version,
+            versionCode = versionCode,
+            title = "Push Update Available ($version)",
+            changelog = changelog,
+            downloadUrl = downloadUrl,
+            fileName = "ParkingTimeDetector-$version.apk"
+        )
+        com.parktimedetector.update.AppUpdateEngine.processPushUpdate(
+            context = context,
+            updateInfo = info,
+            autoDownload = autoDownload
+        )
     }
 }

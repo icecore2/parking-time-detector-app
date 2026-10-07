@@ -61,6 +61,7 @@ class SimulationReceiver : BroadcastReceiver() {
                     "overlay", "overlay_test" -> handleOverlayTest(context, resolvedPkg, appName)
                     "advance_alarm", "test_advance" -> handleTriggerAdvanceAlarm(context)
                     "expiry_alarm", "test_expiry" -> handleTriggerExpiryAlarm(context)
+                    "update", "push_update" -> handleSimulatePushUpdate(context, intent)
                     "clear" -> handleClearAll(context)
                     else -> {
                         Log.w(TAG, "Unknown simulation action type: $type")
@@ -263,5 +264,24 @@ class SimulationReceiver : BroadcastReceiver() {
         NotificationHelper.cancelDetectionApprovalNotification(context)
         NotificationHelper.cancelStopApprovalNotification(context)
         AppLogger.info(context, "SIMULATOR", "Cleared all sessions and reset simulator state")
+    }
+
+    private fun handleSimulatePushUpdate(context: Context, intent: Intent) {
+        val version = intent.getStringExtra("version") ?: "1.1.0"
+        val versionCode = if (intent.hasExtra("versionCode")) intent.getIntExtra("versionCode", 2) else 2
+        val downloadUrl = intent.getStringExtra("downloadUrl")
+            ?: "https://github.com/icecore2/parking-time-detector-app/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0.apk"
+        val changelog = intent.getStringExtra("changelog") ?: "Simulated push update for local testing"
+        val autoDownload = intent.getBooleanExtra("autoDownload", false)
+
+        val info = com.parktimedetector.update.AppUpdateInfo(
+            versionName = version,
+            versionCode = versionCode,
+            title = "Parking Time Detector $version",
+            changelog = changelog,
+            downloadUrl = downloadUrl,
+            fileName = "ParkingTimeDetector-$version.apk"
+        )
+        com.parktimedetector.update.AppUpdateEngine.processPushUpdate(context, info, autoDownload)
     }
 }

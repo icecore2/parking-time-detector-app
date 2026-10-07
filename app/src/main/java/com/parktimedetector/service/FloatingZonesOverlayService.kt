@@ -42,10 +42,33 @@ object FloatingZonesOverlayService {
 
     /**
      * Displays the floating window over the screen with live fetched cheapest zones.
+     * Automatically resolves current device GPS coordinates if lat/lng are omitted or default.
      */
-    fun show(context: Context, lat: Double = 51.0486, lng: Double = -114.0708) {
+    fun show(context: Context, lat: Double? = null, lng: Double? = null) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(context)) {
+            Log.w(TAG, "Cannot show floating overlay: SYSTEM_ALERT_WINDOW permission not granted")
+            return
+        }
+
+        // Resolve location: use provided coordinates or query last known device location, fallback to Calgary Downtown
+        val resolvedLat: Double
+        val resolvedLng: Double
+        if (lat != null && lng != null) {
+            resolvedLat = lat
+            resolvedLng = lng
+        } else {
+            val deviceLoc = com.parktimedetector.location.LocationHelper.getLastKnownLocation(context)
+            if (deviceLoc != null) {
+                resolvedLat = deviceLoc.latitude
+                resolvedLng = deviceLoc.longitude
+            } else {
+                resolvedLat = 51.0486
+                resolvedLng = -114.0708
+            }
+        }
+
         if (overlayView != null) {
-            refreshData(context, lat, lng)
+            refreshData(context, resolvedLat, resolvedLng)
             return
         }
 
@@ -81,11 +104,11 @@ object FloatingZonesOverlayService {
         }
         currentParams = params
 
-        setupInteractions(context, view, params, lat, lng)
+        setupInteractions(context, view, params, resolvedLat, resolvedLng)
 
         try {
             wm.addView(view, params)
-            refreshData(context, lat, lng)
+            refreshData(context, resolvedLat, resolvedLng)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to attach floating overlay window", e)
             overlayView = null

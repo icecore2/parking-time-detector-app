@@ -86,6 +86,13 @@ class MockMyParkingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Auto-show floating overlay if user has granted overlay permission
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M ||
+            android.provider.Settings.canDrawOverlays(this)
+        ) {
+            com.parktimedetector.service.FloatingZonesOverlayService.show(this)
+        }
+
         setContent {
             MockMyParkingApp(
                 onClose = { finish() },
@@ -94,6 +101,12 @@ class MockMyParkingActivity : ComponentActivity() {
                 }
             )
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Ensure floating overlay closes when exiting the activity
+        com.parktimedetector.service.FloatingZonesOverlayService.hide()
     }
 }
 
@@ -151,8 +164,23 @@ fun MockMyParkingApp(
         }
     }
 
-    // Auto-fetch default pin on initial launch
+    // Auto-fetch default pin on initial launch and register overlay selection callback
     LaunchedEffect(Unit) {
+        com.parktimedetector.service.FloatingZonesOverlayService.onZoneSelectedCallback = { zone ->
+            selectedZoneNumber = zone.zoneNumber
+            selectedLot = zone.address
+            selectedDurationMinutes = zone.maxTimeMinutes ?: 120
+            selectedRateText = zone.cheapestPrice.displayPrice
+            onPinPressed(
+                ParkingMapPin(
+                    zoneNumber = zone.zoneNumber,
+                    title = "Zone ${zone.zoneNumber}",
+                    subtitle = zone.address,
+                    latitude = 51.0486,
+                    longitude = -114.0708
+                )
+            )
+        }
         onPinPressed(mapPins.first())
     }
 

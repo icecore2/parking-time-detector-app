@@ -161,6 +161,42 @@ object SessionNotificationParser {
         return (hasStartEndHeader || hasEndParkingButton) && hasCountdown
     }
 
+    /**
+     * Determines whether the current screen content or window class in MyParking corresponds
+     * to the map exploration or zone search view.
+     */
+    fun isMyParkingMapScreen(texts: List<String>, className: String? = null): Boolean {
+        // If an active session countdown or receipt stop screen is present, it is not a pure map search screen
+        if (isStartEndActiveSessionScreen(texts) || isStopScreen(texts)) {
+            return false
+        }
+
+        val combined = texts.joinToString(" ").lowercase()
+
+        // 1. Check class name for map indicators
+        val lowerClass = className?.lowercase() ?: ""
+        if (lowerClass.contains("map") || lowerClass.contains("mockmyparking")) {
+            return true
+        }
+
+        // 2. Check for map / search / zone keywords
+        val hasMapKeywords = combined.contains("map") ||
+            combined.contains("search zone") ||
+            combined.contains("search lot") ||
+            combined.contains("select pin") ||
+            combined.contains("interactive map") ||
+            combined.contains("calgary parking") ||
+            combined.contains("press pin") ||
+            combined.contains("zone number") ||
+            combined.contains("lot number") ||
+            combined.contains("find parking") ||
+            combined.contains("nearby")
+
+        val hasZoneOrLot = combined.contains("zone") || combined.contains("lot")
+
+        return hasMapKeywords && hasZoneOrLot
+    }
+
     fun extractLocationAddress(nodes: List<String>): String? {
         val nonAddressIndicators = listOf(
             "start/end session", "end parking session", "start parking", "stop parking",

@@ -15,6 +15,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Query ParkedIn and MyParking apps to open them directly -->
     <queries>
@@ -116,6 +117,19 @@
             <intent-filter>
                 <action android:name="com.parktimedetector.action.SIMULATE" />
                 <action android:name="com.parktimedetector.SIMULATE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver for Receiving Push Updates & Checking Updates -->
+        <receiver
+            android:name=".update.UpdatePushReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.parktimedetector.action.PUSH_UPDATE" />
+                <action android:name="com.parktimedetector.action.CHECK_UPDATE" />
+                <action android:name="com.parktimedetector.action.DOWNLOAD_UPDATE" />
+                <action android:name="com.parktimedetector.action.INSTALL_UPDATE" />
+                <action android:name="com.parktimedetector.action.DISMISS_UPDATE" />
             </intent-filter>
         </receiver>
 

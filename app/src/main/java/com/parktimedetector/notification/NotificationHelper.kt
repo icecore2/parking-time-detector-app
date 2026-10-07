@@ -12,6 +12,9 @@ import com.parktimedetector.MainActivity
 import com.parktimedetector.R
 import com.parktimedetector.data.ParkingSession
 import com.parktimedetector.receiver.ParkingAlarmReceiver
+import com.parktimedetector.update.AppUpdateInfo
+import com.parktimedetector.update.UpdatePushReceiver
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -27,7 +30,9 @@ object NotificationHelper {
     const val NOTIFICATION_ID_EXPIRED = 1003
     const val NOTIFICATION_ID_CRITICAL = 1006
     const val NOTIFICATION_ID_WALK_BUFFER = 1008
+    const val NOTIFICATION_ID_UPDATE = 2001
     const val CHANNEL_WALK_BUFFER_ID = "parking_walk_buffer_alerts"
+    const val CHANNEL_UPDATES_ID = "parking_app_updates"
 
     const val PARKEDIN_PACKAGE = "com.preciseparklink.parkedin"
     const val MYPARKING_PACKAGE = "com.cpa.accountManagement"
@@ -89,10 +94,22 @@ object NotificationHelper {
                 setShowBadge(true)
             }
 
+            // 5. High priority channel for App Updates and Download Notifications
+            val updatesChannel = NotificationChannel(
+                CHANNEL_UPDATES_ID,
+                "App Updates",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Alerts and progress notifications when new app versions are available to install"
+                enableVibration(true)
+                setShowBadge(true)
+            }
+
             notificationManager.createNotificationChannel(urgentChannel)
             notificationManager.createNotificationChannel(statusChannel)
             notificationManager.createNotificationChannel(quietApprovalChannel)
             notificationManager.createNotificationChannel(walkChannel)
+            notificationManager.createNotificationChannel(updatesChannel)
         }
     }
 
@@ -574,6 +591,147 @@ object NotificationHelper {
         notificationManager.cancel(NOTIFICATION_ID_APPROVAL)
         notificationManager.cancel(NOTIFICATION_ID_STOP_APPROVAL)
         notificationManager.cancel(NOTIFICATION_ID_WALK_BUFFER)
+        notificationManager.cancel(NOTIFICATION_ID_UPDATE)
         com.parktimedetector.audio.AlarmSoundManager.stop(context)
+    }
+
+    /**
+     * Shows notification alerting that an application update is available to download.
+     */
+    fun showUpdateAvailableNotification(context: Context, updateInfo: AppUpdateInfo) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+
+        val appIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("navigate_tab", "SETTINGS")
+        }
+        val appPI = PendingIntent.getActivity(
+            context,
+            2001,
+            appIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val downloadIntent = Intent(context, UpdatePushReceiver::class.java).apply {
+            action = UpdatePushReceiver.ACTION_DOWNLOAD_UPDATE
+            putExtra("version", updateInfo.versionName)
+            putExtra("downloadUrl", updateInfo.downloadUrl)
+            putExtra("fileName", updateInfo.fileName)
+            updateInfo.versionCode?.let { putExtra("versionCode", it) }
+        }
+        val downloadPI = PendingIntent.getBroadcast(
+            context,
+            2002,
+            downloadIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val summaryText = if (updateInfo.changelog.isNotBlank()) {
+            "Version ${updateInfo.versionName} is ready to download.\n\n${updateInfo.changelog}"
+        } else {
+            "Version ${updateInfo.versionName} is ready to download."
+        }
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_UPDATES_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("🎉 New Update: ${updateInfo.versionName}")
+            .setContentText("A newer version is available. Tap to view or download.")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(summaryText))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setContentIntent(appPI)
+            .addAction(0, "⬇️ Download", downloadPI)
+            .addAction(0, "View Details", appPI)
+
+        notificationManager.notify(NOTIFICATION_ID_UPDATE, builder.build())
+    }
+
+    /**
+     * Shows an ongoing download progress notification for the APK update.
+     */
+    fun showUpdateProgressNotification(
+        context: Context,
+        progressPercent: Int,
+        updateInfo: AppUpdateInfo
+    ) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+
+        val cancelIntent = Intent(context, UpdatePushReceiver::class.java).apply {
+            action = UpdatePushReceiver.ACTION_DISMISS_UPDATE
+        }
+        val cancelPI = PendingIntent.getBroadcast(
+            context,
+            2003,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val isIndeterminate = progressPercent < 0
+        val percentText = if (!isIndeterminate) "$progressPercent%" else "Downloading..."
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_UPDATES_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Downloading Update ${updateInfo.versionName} ($percentText)")
+            .setContentText(updateInfo.fileName)
+            .setProgress(100, if (isIndeterminate) 0 else progressPercent, isIndeterminate)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(0, "Cancel", cancelPI)
+
+        notificationManager.notify(NOTIFICATION_ID_UPDATE, builder.build())
+    }
+
+    /**
+     * Shows notification indicating that the APK has finished downloading and is ready to install.
+     */
+    fun showUpdateReadyNotification(
+        context: Context,
+        apkFile: File,
+        updateInfo: AppUpdateInfo
+    ) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+
+        val apkUri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            apkFile
+        )
+        val installIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(apkUri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val installPI = PendingIntent.getActivity(
+            context,
+            2004,
+            installIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_UPDATES_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("✅ Update Ready to Install")
+            .setContentText("Version ${updateInfo.versionName} downloaded. Tap to install now.")
+            .setStyle(
+                NotificationCompat.BigTextStyle().bigText(
+                    "Version ${updateInfo.versionName} has downloaded successfully. Tap below to launch the package installer."
+                )
+            )
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(installPI)
+            .addAction(0, "📦 Install Now", installPI)
+
+        notificationManager.notify(NOTIFICATION_ID_UPDATE, builder.build())
+    }
+
+    /**
+     * Cancels any active update or download notification.
+     */
+    fun cancelUpdateNotification(context: Context) {
+        val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
+        notificationManager.cancel(NOTIFICATION_ID_UPDATE)
     }
 }

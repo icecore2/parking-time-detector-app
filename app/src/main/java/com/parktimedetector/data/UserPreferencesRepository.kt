@@ -79,6 +79,7 @@ class UserPreferencesRepository(private val context: Context) {
         val KEY_SYNC_CALENDAR_ENABLED = booleanPreferencesKey("sync_calendar_enabled")
         val KEY_SELECTED_CALENDAR_ID = longPreferencesKey("selected_calendar_id")
         val KEY_SELECTED_CALENDAR_NAME = stringPreferencesKey("selected_calendar_name")
+        val KEY_AUTO_SHOW_FLOATING_RATES_ON_MAP = booleanPreferencesKey("auto_show_floating_rates_on_map")
 
         const val DEFAULT_ADVANCE_MINUTES = 15
         const val DEFAULT_CRITICAL_MINUTES = 2
@@ -148,6 +149,10 @@ class UserPreferencesRepository(private val context: Context) {
         preferences[KEY_DISMISS_OVERLAY_ON_SCREEN_OFF] ?: true
     }
 
+    val autoShowFloatingRatesOnMap: Flow<Boolean> = context.dataStore.data.map { preferences ->
+        preferences[KEY_AUTO_SHOW_FLOATING_RATES_ON_MAP] ?: true
+    }
+
     val enableQuickRenewAutomation: Flow<Boolean> = context.dataStore.data.map { preferences ->
         preferences[KEY_ENABLE_QUICK_RENEW_AUTOMATION] ?: true
     }
@@ -207,6 +212,12 @@ class UserPreferencesRepository(private val context: Context) {
     suspend fun setDismissOverlayOnScreenOff(dismiss: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[KEY_DISMISS_OVERLAY_ON_SCREEN_OFF] = dismiss
+        }
+    }
+
+    suspend fun setAutoShowFloatingRatesOnMap(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[KEY_AUTO_SHOW_FLOATING_RATES_ON_MAP] = enabled
         }
     }
 

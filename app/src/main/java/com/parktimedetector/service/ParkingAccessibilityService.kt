@@ -235,7 +235,12 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                     pkgName.contains("parkedin", ignoreCase = true) ||
                     isMockActivityEvent
 
-                if (!isTargetParkingApp) return@launch
+                if (!isTargetParkingApp) {
+                    if (FloatingZonesOverlayService.isShowing()) {
+                        mainHandler.post { FloatingZonesOverlayService.hide() }
+                    }
+                    return@launch
+                }
 
                 val alwaysDetect = prefsRepo.alwaysDetect.first()
                 if (!alwaysDetect && !ManualDetectionManager.isDetectionWindowActive()) {
@@ -603,8 +608,36 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 startTimeMillis = parsedResult.startTimeMillis ?: now
             )
             DetectionApprovalManager.requestApprovalOrStart(applicationContext, pending)
+            // Once a session starts, hide the map rates overlay so it does not obstruct the active session
+            FloatingZonesOverlayService.hide()
         } else {
             // Screen looked like a parking screen but couldn't parse time
+            // Check if user is viewing the MyParking map / zone exploration screen!
+            if (isMyParkingApp && SessionNotificationParser.isMyParkingMapScreen(texts, lastForegroundActivity)) {
+                val prefsRepo = UserPreferencesRepository(applicationContext)
+                val autoShowOverlay = prefsRepo.autoShowFloatingRatesOnMap.first()
+                if (autoShowOverlay) {
+                    mainHandler.post {
+                        if (!FloatingZonesOverlayService.isShowing()) {
+                            AppLogger.info(
+                                context = applicationContext,
+                                tag = "MAP_OVERLAY",
+                                message = "[FLOW: MAP_OVERLAY] MyParking map detected! Automatically showing floating cheapest zones overlay.",
+                                packageName = pkgName
+                            )
+                            FloatingZonesOverlayService.show(applicationContext)
+                        }
+                    }
+                }
+            } else if (!isMyParkingApp || SessionNotificationParser.isStopScreen(texts)) {
+                // If user is on a different screen (or stopped/history screen), auto-hide map prices
+                mainHandler.post {
+                    if (FloatingZonesOverlayService.isShowing()) {
+                        FloatingZonesOverlayService.hide()
+                    }
+                }
+            }
+
             AppLogger.warn(
                 context = applicationContext,
                 tag = "SCREEN_PARSE_FAILED",

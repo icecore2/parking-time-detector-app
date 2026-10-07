@@ -703,5 +703,40 @@ class SessionNotificationParserTest {
         assertEquals(12, calEnd.get(Calendar.HOUR_OF_DAY))
         assertEquals(0, calEnd.get(Calendar.MINUTE))
     }
+
+    @Test
+    fun testMyParkingMapScreenDetection() {
+        val mapScreenTexts = listOf(
+            "MyParking (Calgary Parking)",
+            "🗺️ Interactive Map (Press Pin to Fetch)",
+            "Lot 58 (9058)",
+            "Zone 1008 (1008)",
+            "Search zone number or lot (e.g. 9058)",
+            "Search Suggestions / Recent Lots"
+        )
+
+        // Map screen with search suggestions should be recognized as a map screen
+        assertTrue(SessionNotificationParser.isMyParkingMapScreen(mapScreenTexts, "MockMyParkingActivity"))
+        assertTrue(SessionNotificationParser.isMyParkingMapScreen(mapScreenTexts, "com.google.android.gms.maps.MapView"))
+
+        // Active session screen should NOT be recognized as a map screen
+        val activeSessionTexts = listOf(
+            "START/END SESSION",
+            "Zone 9058",
+            "Lot 58 - 935 - 4 Av SW",
+            "Remaining: 01 hr : 20 mins",
+            "End Parking Session"
+        )
+        assertFalse(SessionNotificationParser.isMyParkingMapScreen(activeSessionTexts, "MockMyParkingActivity"))
+
+        // Stop session / receipt screen should NOT be recognized as a map screen
+        val stopScreenTexts = listOf(
+            "Parking Session Ended",
+            "Stopped at 2:30 PM",
+            "Total cost: $3.00",
+            "Done"
+        )
+        assertFalse(SessionNotificationParser.isMyParkingMapScreen(stopScreenTexts, "ReceiptActivity"))
+    }
 }
 

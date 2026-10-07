@@ -93,6 +93,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Check for updates silently in the background
+        viewModel.checkForUpdates(this, silent = true)
+
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
             ParkingTimeDetectorTheme(themeMode = themeMode) {
@@ -145,7 +148,10 @@ fun MainAppContent(viewModel: ParkingViewModel) {
     // When opened from notification or when pending detection exists in app,
     // ensure user is on the HOME tab and dismiss floating overlay so there's no visual clutter.
     androidx.compose.runtime.LaunchedEffect(activity?.intent, pendingDetection, pendingStopDetection) {
-        if (activity?.intent?.getBooleanExtra("EXTRA_SHOW_APPROVAL_DIALOG", false) == true ||
+        if (activity?.intent?.getStringExtra("navigate_tab") == "SETTINGS") {
+            currentTab = ScreenTab.SETTINGS
+            activity.intent.removeExtra("navigate_tab")
+        } else if (activity?.intent?.getBooleanExtra("EXTRA_SHOW_APPROVAL_DIALOG", false) == true ||
             activity?.intent?.getBooleanExtra("EXTRA_SHOW_STOP_DIALOG", false) == true
         ) {
             currentTab = ScreenTab.HOME

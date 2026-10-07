@@ -151,6 +151,23 @@ adb shell am broadcast -a com.parktimedetector.action.SIMULATE \
 adb shell am broadcast -a com.parktimedetector.action.SIMULATE \
   --es type overlay
 
+# Trigger Push Update via SimulationReceiver
+adb shell am broadcast -a com.parktimedetector.action.SIMULATE \
+  --es type update \
+  --es version "1.1.0" \
+  --ei versionCode 2 \
+  --es changelog "New update engine features"
+
+# Or directly target UpdatePushReceiver
+adb shell am broadcast -a com.parktimedetector.action.PUSH_UPDATE \
+  --es version "1.1.0" \
+  --ei versionCode 2 \
+  --es downloadUrl "https://github.com/icecore2/parking-time-detector-app/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0.apk" \
+  --es changelog "New update engine features"
+
+# Trigger on-demand check against GitHub
+adb shell am broadcast -a com.parktimedetector.action.CHECK_UPDATE
+
 # Reset
 adb shell am broadcast -a com.parktimedetector.action.SIMULATE \
   --es type clear

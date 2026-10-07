@@ -384,6 +384,36 @@ fun SimulatorPlaygroundContent(
                         Text("🛑 Stop: MyParking", color = RoseRed, fontSize = 12.sp)
                     }
                 }
+
+                // 4. Update Engine Push Simulations
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.simulatePushUpdate(
+                                context = context,
+                                version = "1.1.0",
+                                versionCode = 2,
+                                changelog = "Simulated Push Update:\n- Update Engine integration\n- Automated APK downloads"
+                            )
+                            Toast.makeText(context, "Simulated push update dispatched!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("🚀 Push Update (v1.1)", color = AccentCyan, fontSize = 12.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.checkForUpdates(context, silent = false)
+                            Toast.makeText(context, "Checking GitHub repository...", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("🔄 Check Repo", color = PrimaryBlue, fontSize = 12.sp)
+                    }
+                }
             }
         }
 

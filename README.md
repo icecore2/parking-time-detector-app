@@ -6,7 +6,8 @@ Android app that monitors parking session notifications and on-screen parking in
 
 - **Automated Detection**: Detects parking sessions from supported apps (such as ParkedIn and MyParking) via Notification Listener and Screen Inspection Accessibility services.
 - **Dynamic Countdown & Warnings**: Automatically calculates expiration time, provides advance notification warnings (e.g. 5–10 minutes before expiry), and triggers expiration alarms.
-- **Testing Playground & Simulator**: Built-in simulator with quick presets and custom session builder to test notification parsing, alarms, and countdowns without needing an active parking session.
+- **Testing Playground & Simulator**: Built-in simulator with quick presets and custom session builder to test notification parsing, alarms, countdowns, and push updates without needing an active parking session.
+- **Push-Enabled Update Engine**: In-app updater that receives push updates via broadcast/intent (`UpdatePushReceiver`), queries GitHub Releases for newer APK releases, streams downloads with progress tracking, and launches the package installer.
 - **Automated CI/CD**: GitHub Actions workflow that automatically tests, builds, and publishes installable release APKs on pushes to `main` and on tag pushes (`v*`).
 
 ## CI/CD & Automated Releases
