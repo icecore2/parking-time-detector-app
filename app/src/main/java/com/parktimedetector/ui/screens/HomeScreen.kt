@@ -1118,30 +1118,79 @@ fun ManualTimerSetupCard(
         }
     }
 
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
+
     val presets = listOf(15, 30, 45, 60, 90, 120, 180)
+
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 250),
+        label = "manualCardChevronRotation"
+    )
 
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded }
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(Icons.Default.Alarm, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Set In-App Parking Timer",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (nearbyZoneResult != null) {
+                            "📍 Detected nearby: ${nearbyZoneResult!!.zoneOrLot} • Tap to set"
+                        } else {
+                            "Tap to set custom duration, meter zone & spot"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (nearbyZoneResult != null) EmeraldGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Set In-App Parking Timer",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(rotation)
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Paid at a parking meter or web QR code? Start a timer here to receive live notifications and walking buffer alerts.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
+                exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(bottom = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    Text(
+                        text = "Paid at a parking meter or web QR code? Start a timer here to receive live notifications and walking buffer alerts.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
             // Automated Zone Discovery Chip Banner
             if (nearbyZoneResult != null) {
@@ -1370,6 +1419,8 @@ fun ManualTimerSetupCard(
             }
         }
     }
+}
+}
 }
 
 @Composable

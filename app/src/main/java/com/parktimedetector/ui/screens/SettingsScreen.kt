@@ -8,9 +8,23 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -255,12 +269,53 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Settings & Preferences",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold
-        )
+        val allSectionKeys = remember {
+            listOf(
+                "THEME",
+                "WALKING_BUFFER",
+                "FAVORITE_ZONES",
+                "CALENDAR_SYNC",
+                "ADVANCE_REMINDER",
+                "ALARM_SOUNDS",
+                "VISUAL_FEEDBACK",
+                "DETECTION_APPROVAL",
+                "QUICK_RENEW_ASSIST",
+                "OVERLAY_PRIVACY",
+                "SUPPORTED_APPS",
+                "PERMISSIONS",
+                "DIAGNOSTICS"
+            )
+        }
+        var expandedSections by remember { mutableStateOf(setOf<String>()) }
+        fun toggleSection(key: String) {
+            expandedSections = if (expandedSections.contains(key)) expandedSections - key else expandedSections + key
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Settings & Preferences",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold
+            )
+            val allExpanded = expandedSections.containsAll(allSectionKeys)
+            TextButton(
+                onClick = {
+                    expandedSections = if (allExpanded) emptySet() else allSectionKeys.toSet()
+                }
+            ) {
+                Text(
+                    text = if (allExpanded) "Collapse All" else "Expand All",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+            }
+        }
 
         // Top App Version & Updates Card
         if (AppUpdateEngine.IS_ENABLED) {
@@ -271,128 +326,67 @@ fun SettingsScreen(
         }
 
         // 0. Theme Mode Selector Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Appearance & Theme",
+            icon = Icons.Default.Palette,
+            iconTint = MaterialTheme.colorScheme.primary,
+            isExpanded = expandedSections.contains("THEME"),
+            onToggle = { toggleSection("THEME") },
+            summary = when (currentThemeMode) {
+                AppThemeMode.SYSTEM -> "System (Auto)"
+                AppThemeMode.LIGHT -> "Light Mode"
+                AppThemeMode.DARK -> "Dark OLED"
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Palette, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Appearance & Theme",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Choose your preferred interface theme. Full light and OLED dark modes available.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                text = "Choose your preferred interface theme. Full light and OLED dark modes available.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val themeOptions = listOf(
+                    Triple(AppThemeMode.SYSTEM, "System", Icons.Default.BrightnessAuto),
+                    Triple(AppThemeMode.LIGHT, "Light", Icons.Default.LightMode),
+                    Triple(AppThemeMode.DARK, "Dark", Icons.Default.DarkMode)
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    val themeOptions = listOf(
-                        Triple(AppThemeMode.SYSTEM, "System", Icons.Default.BrightnessAuto),
-                        Triple(AppThemeMode.LIGHT, "Light", Icons.Default.LightMode),
-                        Triple(AppThemeMode.DARK, "Dark", Icons.Default.DarkMode)
-                    )
-
-                    themeOptions.forEach { (mode, label, icon) ->
-                        val isSelected = currentThemeMode == mode
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.setThemeMode(mode) },
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                themeOptions.forEach { (mode, label, icon) ->
+                    val isSelected = currentThemeMode == mode
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { viewModel.setThemeMode(mode) },
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                modifier = Modifier.padding(vertical = 12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 1. Walking Back Buffer Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DirectionsWalk, contentDescription = null, tint = AmberWarning)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Time to Walk Back Buffer",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Triggers a high-priority heads-up warning ahead of time so you can begin walking back to your car before the meter expires.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    walkingBufferOptions.forEach { minutes ->
-                        val isSelected = walkingBufferMinutes == minutes
-                        Surface(
-                            color = if (isSelected) AmberWarning else MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) AmberWarning else MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { viewModel.setWalkingBufferMinutes(minutes) }
-                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = if (minutes == 0) "Disabled (0m)" else "$minutes mins",
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                color = if (isSelected) com.parktimedetector.ui.theme.DarkNavy else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                text = label,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
@@ -400,77 +394,111 @@ fun SettingsScreen(
             }
         }
 
-        // 2. Favorite Parking Zones Manager Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
+        // 1. Walking Back Buffer Card
+        CollapsibleSettingsCard(
+            title = "Time to Walk Back Buffer",
+            icon = Icons.Default.DirectionsWalk,
+            iconTint = AmberWarning,
+            isExpanded = expandedSections.contains("WALKING_BUFFER"),
+            onToggle = { toggleSection("WALKING_BUFFER") },
+            summary = if (walkingBufferMinutes == 0) "Disabled (0m)" else "$walkingBufferMinutes mins ahead",
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Star, contentDescription = null, tint = AmberWarning)
-                        Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Triggers a high-priority heads-up warning ahead of time so you can begin walking back to your car before the meter expires.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                walkingBufferOptions.forEach { minutes ->
+                    val isSelected = walkingBufferMinutes == minutes
+                    Surface(
+                        color = if (isSelected) AmberWarning else MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) AmberWarning else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { viewModel.setWalkingBufferMinutes(minutes) }
+                    ) {
                         Text(
-                            text = "Favorite Parking Zones",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Bold
+                            text = if (minutes == 0) "Disabled (0m)" else "$minutes mins",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            color = if (isSelected) com.parktimedetector.ui.theme.DarkNavy else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         )
                     }
-                    IconButton(onClick = { showAddZoneDialog = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Favorite Zone", tint = MaterialTheme.colorScheme.primary)
-                    }
                 }
-                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
+
+        // 2. Favorite Parking Zones Manager Card
+        CollapsibleSettingsCard(
+            title = "Favorite Parking Zones",
+            icon = Icons.Default.Star,
+            iconTint = AmberWarning,
+            isExpanded = expandedSections.contains("FAVORITE_ZONES"),
+            onToggle = { toggleSection("FAVORITE_ZONES") },
+            summary = if (favoriteZones.isEmpty()) "None saved" else "${favoriteZones.size} zones saved",
+            trailingAction = {
+                IconButton(onClick = { showAddZoneDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Favorite Zone", tint = MaterialTheme.colorScheme.primary)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Text(
+                text = "Frequent lots or street meters with quick 1-tap start chips on the Home screen.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (favoriteZones.isEmpty()) {
                 Text(
-                    text = "Frequent lots or street meters with quick 1-tap start chips on the Home screen.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "No favorite zones saved yet. Tap + to add frequent meters.",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                if (favoriteZones.isEmpty()) {
-                    Text(
-                        text = "No favorite zones saved yet. Tap + to add frequent meters.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        favoriteZones.forEach { fav ->
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                                modifier = Modifier.fillMaxWidth()
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    favoriteZones.forEach { fav ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(fav.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(
+                                        "${fav.defaultDurationMinutes}m default" + (fav.notes?.let { " • $it" } ?: ""),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { viewModel.removeFavoriteZone(fav.id) },
+                                    modifier = Modifier.size(28.dp)
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(fav.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                        Text(
-                                            "${fav.defaultDurationMinutes}m default" + (fav.notes?.let { " • $it" } ?: ""),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = { viewModel.removeFavoriteZone(fav.id) },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Remove", tint = RoseRed, modifier = Modifier.size(18.dp))
-                                    }
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove", tint = RoseRed, modifier = Modifier.size(18.dp))
                                 }
                             }
                         }
@@ -480,169 +508,157 @@ fun SettingsScreen(
         }
 
         // Calendar Synchronization Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.DateRange,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Calendar Synchronization",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = calendarSyncEnabled,
-                        onCheckedChange = { enabled ->
-                            if (enabled && !hasCalendarPermission) {
-                                calendarPermissionLauncher.launch(
-                                    arrayOf(
-                                        android.Manifest.permission.READ_CALENDAR,
-                                        android.Manifest.permission.WRITE_CALENDAR
-                                    )
+        CollapsibleSettingsCard(
+            title = "Calendar Synchronization",
+            icon = Icons.Default.DateRange,
+            iconTint = MaterialTheme.colorScheme.primary,
+            isExpanded = expandedSections.contains("CALENDAR_SYNC"),
+            onToggle = { toggleSection("CALENDAR_SYNC") },
+            summary = if (calendarSyncEnabled) (selectedCalendarName ?: "Active") else "Off",
+            trailingAction = {
+                Switch(
+                    checked = calendarSyncEnabled,
+                    onCheckedChange = { enabled ->
+                        if (enabled && !hasCalendarPermission) {
+                            calendarPermissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.READ_CALENDAR,
+                                    android.Manifest.permission.WRITE_CALENDAR
                                 )
-                            }
-                            viewModel.toggleSyncCalendar(enabled)
-                        }
-                    )
-                }
-
-                Text(
-                    text = "Automatically create events in Google or Device Calendar blocking out your parking session time with BUSY availability to prevent overlapping meeting schedules.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (calendarSyncEnabled) {
-                    if (!hasCalendarPermission) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = RoseRed.copy(alpha = 0.15f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, RoseRed.copy(alpha = 0.5f)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = RoseRed)
-                                Text(
-                                    "Calendar permission required to create events.",
-                                    color = TextPrimary,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Button(
-                                    onClick = {
-                                        calendarPermissionLauncher.launch(
-                                            arrayOf(
-                                                android.Manifest.permission.READ_CALENDAR,
-                                                android.Manifest.permission.WRITE_CALENDAR
-                                            )
-                                        )
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("Grant", color = Color.White, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    } else {
-                        // Calendar selection list
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                text = "Target Calendar:",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold
                             )
+                        }
+                        viewModel.toggleSyncCalendar(enabled)
+                    }
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Text(
+                text = "Automatically create events in Google or Device Calendar blocking out your parking session time with BUSY availability to prevent overlapping meeting schedules.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-                            if (availableCalendars.isEmpty()) {
-                                Text(
-                                    "No device calendars discovered or querying...",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                availableCalendars.forEach { cal ->
-                                    val isSelected = (selectedCalendarId == cal.id) ||
-                                            (selectedCalendarId == null && cal.isPrimary)
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                        border = androidx.compose.foundation.BorderStroke(
-                                            1.dp,
-                                            if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                viewModel.selectCalendar(cal.id, cal.displayName)
-                                            }
+            if (calendarSyncEnabled) {
+                Spacer(modifier = Modifier.height(14.dp))
+                if (!hasCalendarPermission) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = RoseRed.copy(alpha = 0.15f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, RoseRed.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = RoseRed)
+                            Text(
+                                "Calendar permission required to create events.",
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Button(
+                                onClick = {
+                                    calendarPermissionLauncher.launch(
+                                        arrayOf(
+                                            android.Manifest.permission.READ_CALENDAR,
+                                            android.Manifest.permission.WRITE_CALENDAR
+                                        )
+                                    )
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Grant", color = Color.White, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                } else {
+                    // Calendar selection list
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Target Calendar:",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        if (availableCalendars.isEmpty()) {
+                            Text(
+                                "No device calendars discovered or querying...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            availableCalendars.forEach { cal ->
+                                val isSelected = (selectedCalendarId == cal.id) ||
+                                        (selectedCalendarId == null && cal.isPrimary)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.selectCalendar(cal.id, cal.displayName)
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(
-                                            modifier = Modifier.padding(12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = cal.displayName + if (cal.isPrimary) " (Primary)" else "",
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontSize = 14.sp
+                                            )
+                                            if (cal.accountName.isNotBlank()) {
                                                 Text(
-                                                    text = cal.displayName + if (cal.isPrimary) " (Primary)" else "",
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurface,
-                                                    fontSize = 14.sp
-                                                )
-                                                if (cal.accountName.isNotBlank()) {
-                                                    Text(
-                                                        text = cal.accountName,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontSize = 12.sp
-                                                    )
-                                                }
-                                            }
-                                            if (isSelected) {
-                                                Icon(
-                                                    Icons.Default.CheckCircle,
-                                                    contentDescription = "Selected",
-                                                    tint = MaterialTheme.colorScheme.primary
+                                                    text = cal.accountName,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 12.sp
                                                 )
                                             }
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                Icons.Default.CheckCircle,
+                                                contentDescription = "Selected",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
+                    }
 
-                        Surface(
-                            shape = RoundedCornerShape(10.dp),
-                            color = EmeraldGreen.copy(alpha = 0.12f),
-                            modifier = Modifier.fillMaxWidth()
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = EmeraldGreen.copy(alpha = 0.12f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldGreen)
-                                Text(
-                                    "Active sessions will automatically block your calendar schedule and adjust if extended.",
-                                    color = TextPrimary,
-                                    fontSize = 12.sp
-                                )
-                            }
+                            Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldGreen)
+                            Text(
+                                "Active sessions will automatically block your calendar schedule and adjust if extended.",
+                                color = TextPrimary,
+                                fontSize = 12.sp
+                            )
                         }
                     }
                 }
@@ -650,56 +666,47 @@ fun SettingsScreen(
         }
 
         // 3. Advance Reminder Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Advance Renewal Alert",
+            icon = Icons.Default.NotificationsActive,
+            iconTint = MaterialTheme.colorScheme.primary,
+            isExpanded = expandedSections.contains("ADVANCE_REMINDER"),
+            onToggle = { toggleSection("ADVANCE_REMINDER") },
+            summary = "$advanceWarningMinutes mins before expiry",
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Advance Renewal Alert",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Notify me this much time before the parking session ends, so I have enough time to renew in ParkedIn.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Text(
+                text = "Notify me this much time before the parking session ends, so I have enough time to renew in ParkedIn.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    warningOptions.forEach { minutes ->
-                        val isSelected = advanceWarningMinutes == minutes
-                        Surface(
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(10.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                            ),
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { viewModel.updateAdvanceWarning(minutes) }
-                        ) {
-                            Text(
-                                text = "$minutes mins${if (minutes == 15) " (Default)" else ""}",
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                warningOptions.forEach { minutes ->
+                    val isSelected = advanceWarningMinutes == minutes
+                    Surface(
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                        ),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { viewModel.updateAdvanceWarning(minutes) }
+                    ) {
+                        Text(
+                            text = "$minutes mins${if (minutes == 15) " (Default)" else ""}",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        )
                     }
                 }
             }
@@ -739,27 +746,20 @@ fun SettingsScreen(
             }
         }
 
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Escalating Alarm & Sound Profiles",
+            icon = Icons.Default.Alarm,
+            iconTint = AmberWarning,
+            isExpanded = expandedSections.contains("ALARM_SOUNDS"),
+            onToggle = { toggleSection("ALARM_SOUNDS") },
+            summary = if (!soundAlerts) "Muted" else (SoundProfileType.values().find { it.name == alarmSoundType }?.displayName ?: "Alarm"),
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Alarm, contentDescription = null, tint = AmberWarning)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "🔊 Escalating Alarm & Sound Profiles",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Configure custom sound profiles, volume ramping, and persistent vibration patterns when entering the critical expiry zone.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
+            Text(
+                text = "Configure custom sound profiles, volume ramping, and persistent vibration patterns when entering the critical expiry zone.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
@@ -1163,100 +1163,91 @@ fun SettingsScreen(
                     }
                 }
             }
-        }
 
         // 3. UI Polish & Tactile Haptic Feedback Card
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Visual & Tactile Feedback",
+            icon = Icons.Default.CheckCircle,
+            iconTint = AccentCyan,
+            isExpanded = expandedSections.contains("VISUAL_FEEDBACK"),
+            onToggle = { toggleSection("VISUAL_FEEDBACK") },
+            summary = if (hapticFeedbackEnabled) "Tactile Haptics Enabled" else "Haptics Disabled",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentCyan)
-                    Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Controls animations and tactile touch sensations across the app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Tactile Haptic Feedback Switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "✨ Visual & Tactile Feedback",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "Tactile Haptic Feedback",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
+                    Text(
+                        text = "Delivers a crisp physical click sensation when tapping timer quick-extend buttons (+15m, +30m, +1h).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Controls animations and tactile touch sensations across the app.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = hapticFeedbackEnabled,
+                    onCheckedChange = { viewModel.toggleHapticFeedback(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = AccentCyan,
+                        checkedTrackColor = AccentCyan.copy(alpha = 0.4f)
+                    )
                 )
+            }
 
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-                // Tactile Haptic Feedback Switch
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
+            // Dynamic Gauge Explanation Surface
+            Surface(
+                color = SurfaceDark,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = EmeraldGreen.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "ACTIVE",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldGreen,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Tactile Haptic Feedback",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "Dynamic Circular Progress Transitions",
+                            style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
-                        Text(
-                            text = "Delivers a crisp physical click sensation when tapping timer quick-extend buttons (+15m, +30m, +1h).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = hapticFeedbackEnabled,
-                        onCheckedChange = { viewModel.toggleHapticFeedback(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = AccentCyan,
-                            checkedTrackColor = AccentCyan.copy(alpha = 0.4f)
-                        )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "The timer gauge automatically transitions: Green (Safe) → Amber (Advance Warning) → Pulsing Red (Critical Zone ≤ ${criticalWarningMinutes}m & Expired), accompanied by an ambient breathing glow.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
                     )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Dynamic Gauge Explanation Surface
-                Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = EmeraldGreen.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "ACTIVE",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = EmeraldGreen,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Dynamic Circular Progress Transitions",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "The timer gauge automatically transitions: Green (Safe) → Amber (Advance Warning) → Pulsing Red (Critical Zone ≤ ${criticalWarningMinutes}m & Expired), accompanied by an ambient breathing glow.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
                 }
             }
         }
@@ -1275,416 +1266,408 @@ fun SettingsScreen(
             }
         }
 
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Detection Approval & Alerts",
+            icon = Icons.Default.CheckCircle,
+            iconTint = EmeraldGreen,
+            isExpanded = expandedSections.contains("DETECTION_APPROVAL"),
+            onToggle = { toggleSection("DETECTION_APPROVAL") },
+            summary = "${if (alwaysDetect) "Continuous" else "On-Demand"} • ${if (requireApproval) "Manual Confirm" else "Auto-Start"}",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = EmeraldGreen)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Detection Approval & Alerts",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Controls how detected parking sessions and stops are confirmed before timers and history are updated.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
+            Text(
+                text = "Controls how detected parking sessions and stops are confirmed before timers and history are updated.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
 
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-                // 0. Always Detect Toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Always Detect",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = if (alwaysDetect) EmeraldGreen.copy(alpha = 0.2f) else AmberWarning.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = if (alwaysDetect) "CONTINUOUS" else "ON-DEMAND (5m)",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (alwaysDetect) EmeraldGreen else AmberWarning,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
+            // 0. Always Detect Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (alwaysDetect) {
-                                "Continuously monitor and detect parking sessions in the background."
-                            } else {
-                                "Automatic background detection paused. Tap 'Start Detection' on the main screen or launch a supported app to activate a 5-minute detection window."
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = alwaysDetect,
-                        onCheckedChange = { viewModel.toggleAlwaysDetect(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = EmeraldGreen,
-                            checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 1. Require Approval Switch
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Require User Confirmation",
+                            text = "Always Detect",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
-                        Text(
-                            text = "Ask for your confirmation instead of automatically starting a timer when parking is detected.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = requireApproval,
-                        onCheckedChange = { viewModel.toggleRequireApproval(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = EmeraldGreen,
-                            checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 2. Built-in Notifications info badge (Default / Recommended)
-                Surface(
-                    color = SurfaceDark,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                color = EmeraldGreen.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "DEFAULT METHOD",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = EmeraldGreen,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = if (alwaysDetect) EmeraldGreen.copy(alpha = 0.2f) else AmberWarning.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
                             Text(
-                                text = "Built-in System Notifications",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Detections send native heads-up notifications with action buttons ('Start Timer', 'Accept Stop', 'Dismiss'). Tap the notification action to confirm without interrupting your current screen.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 3. Confirmation Dialog Windows
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Confirmation Dialog Window",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = PrimaryBlue.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "Floating Overlay",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = PrimaryBlue,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Show a floating confirmation dialog directly over parking apps. When enabled, notifications stay quiet in the shade to prevent on-screen popup clutter.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = showConfirmationDialogs,
-                        onCheckedChange = { viewModel.toggleShowConfirmationDialogs(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryBlue,
-                            checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
-                        )
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // 3b. Auto-Show Cheapest Rates on Map Toggle
-                val autoShowFloatingRatesOnMap by viewModel.autoShowFloatingRatesOnMap.collectAsState()
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Auto-Show Cheapest Rates on Map",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                color = EmeraldGreen.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "MyParking",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = EmeraldGreen,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
-                        Text(
-                            text = "Automatically project the floating cheapest zones overlay whenever looking at the map in Calgary MyParking.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = autoShowFloatingRatesOnMap,
-                        onCheckedChange = { viewModel.toggleAutoShowFloatingRatesOnMap(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = EmeraldGreen,
-                            checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
-                        )
-                    )
-                }
-
-                if (showConfirmationDialogs) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Surface(
-                        color = SurfaceDark.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "Initial Detection Presentation",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Choose how new parking and stop detections are presented on screen.",
+                                text = if (alwaysDetect) "CONTINUOUS" else "ON-DEMAND (5m)",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            com.parktimedetector.data.OverlayPresentationMode.values().forEach { mode ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.setOverlayPresentationMode(mode) }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    androidx.compose.material3.RadioButton(
-                                        selected = overlayPresentationMode == mode,
-                                        onClick = { viewModel.setOverlayPresentationMode(mode) },
-                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                                            selectedColor = EmeraldGreen
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
-                                        Text(
-                                            text = mode.title,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = if (overlayPresentationMode == mode) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (overlayPresentationMode == mode) TextPrimary else TextSecondary
-                                        )
-                                        Text(
-                                            text = mode.description,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextSecondary
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            Text(
-                                text = "Dialog Placement (When Expanded)",
-                                style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = if (alwaysDetect) EmeraldGreen else AmberWarning,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            com.parktimedetector.data.OverlayDialogPosition.values().forEach { pos ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.setOverlayDialogPosition(pos) }
-                                        .padding(vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    androidx.compose.material3.RadioButton(
-                                        selected = overlayDialogPosition == pos,
-                                        onClick = { viewModel.setOverlayDialogPosition(pos) },
-                                        colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                                            selectedColor = PrimaryBlue
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Column {
-                                        Text(
-                                            text = pos.title,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = if (overlayDialogPosition == pos) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (overlayDialogPosition == pos) TextPrimary else TextSecondary
-                                        )
-                                        Text(
-                                            text = pos.description,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = TextSecondary
-                                        )
-                                    }
-                                }
-                            }
                         }
                     }
+                    Text(
+                        text = if (alwaysDetect) {
+                            "Continuously monitor and detect parking sessions in the background."
+                        } else {
+                            "Automatic background detection paused. Tap 'Start Detection' on the main screen or launch a supported app to activate a 5-minute detection window."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = alwaysDetect,
+                    onCheckedChange = { viewModel.toggleAlwaysDetect(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = EmeraldGreen,
+                        checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
+                    )
+                )
+            }
 
-                Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-                // 4. Notification Troubleshooting Section
+            // 1. Require Approval Switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Require User Confirmation",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Ask for your confirmation instead of automatically starting a timer when parking is detected.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = requireApproval,
+                    onCheckedChange = { viewModel.toggleRequireApproval(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = EmeraldGreen,
+                        checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2. Built-in Notifications info badge (Default / Recommended)
+            Surface(
+                color = SurfaceDark,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = EmeraldGreen.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = "DEFAULT METHOD",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldGreen,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Built-in System Notifications",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Detections send native heads-up notifications with action buttons ('Start Timer', 'Accept Stop', 'Dismiss'). Tap the notification action to confirm without interrupting your current screen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3. Confirmation Dialog Windows
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Confirmation Dialog Window",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = PrimaryBlue.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "Floating Overlay",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = PrimaryBlue,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Show a floating confirmation dialog directly over parking apps. When enabled, notifications stay quiet in the shade to prevent on-screen popup clutter.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = showConfirmationDialogs,
+                    onCheckedChange = { viewModel.toggleShowConfirmationDialogs(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = PrimaryBlue,
+                        checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
+                    )
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 3b. Auto-Show Cheapest Rates on Map Toggle
+            val autoShowFloatingRatesOnMap by viewModel.autoShowFloatingRatesOnMap.collectAsState()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Auto-Show Cheapest Rates on Map",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            color = EmeraldGreen.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "MyParking",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = EmeraldGreen,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Automatically project the floating cheapest zones overlay whenever looking at the map in Calgary MyParking.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = autoShowFloatingRatesOnMap,
+                    onCheckedChange = { viewModel.toggleAutoShowFloatingRatesOnMap(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = EmeraldGreen,
+                        checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
+                    )
+                )
+            }
+
+            if (showConfirmationDialogs) {
+                Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    color = if (!areNotificationsEnabled) RoseRed.copy(alpha = 0.12f) else SurfaceDark.copy(alpha = 0.5f),
+                    color = SurfaceDark.copy(alpha = 0.5f),
                     shape = RoundedCornerShape(10.dp),
-                    border = if (!areNotificationsEnabled) androidx.compose.foundation.BorderStroke(1.dp, RoseRed) else null,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Having trouble with notifications?",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (!areNotificationsEnabled) RoseRed else TextPrimary
-                            )
-                            Surface(
-                                color = if (areNotificationsEnabled) EmeraldGreen.copy(alpha = 0.2f) else RoseRed.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(6.dp)
+                        Text(
+                            text = "Initial Detection Presentation",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Choose how new parking and stop detections are presented on screen.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        com.parktimedetector.data.OverlayPresentationMode.values().forEach { mode ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setOverlayPresentationMode(mode) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = if (areNotificationsEnabled) "Notifications Allowed" else "Notifications Blocked",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (areNotificationsEnabled) EmeraldGreen else RoseRed,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                androidx.compose.material3.RadioButton(
+                                    selected = overlayPresentationMode == mode,
+                                    onClick = { viewModel.setOverlayPresentationMode(mode) },
+                                    colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                        selectedColor = EmeraldGreen
+                                    )
                                 )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Column {
+                                    Text(
+                                        text = mode.title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = if (overlayPresentationMode == mode) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (overlayPresentationMode == mode) TextPrimary else TextSecondary
+                                    )
+                                    Text(
+                                        text = mode.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary
+                                    )
+                                }
                             }
                         }
 
-                        if (!areNotificationsEnabled) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "System notifications are disabled for ParkingTimeDetector. Notifications cannot appear until enabled.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = {
-                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    context.startActivity(intent)
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
-                                shape = RoundedCornerShape(8.dp)
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "Dialog Placement (When Expanded)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        com.parktimedetector.data.OverlayDialogPosition.values().forEach { pos ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setOverlayDialogPosition(pos) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Open System Notification Settings", color = Color.White, fontSize = 12.sp)
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Some device brands (Samsung, Xiaomi, Huawei) silence heads-up banners or aggressively put apps to sleep. Send a test notification below to check if heads-up notifications show on your phone. If not, enable 'Confirmation Dialog Windows' above.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.sendTestApprovalNotification()
-                                    Toast.makeText(context, "Test approval notification sent! Check your notification bar.", Toast.LENGTH_SHORT).show()
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp), tint = PrimaryBlue)
+                                androidx.compose.material3.RadioButton(
+                                    selected = overlayDialogPosition == pos,
+                                    onClick = { viewModel.setOverlayDialogPosition(pos) },
+                                    colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                        selectedColor = PrimaryBlue
+                                    )
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Send Test Approval Notification", color = PrimaryBlue, fontSize = 13.sp)
+                                Column {
+                                    Text(
+                                        text = pos.title,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = if (overlayDialogPosition == pos) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (overlayDialogPosition == pos) TextPrimary else TextSecondary
+                                    )
+                                    Text(
+                                        text = pos.description,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary
+                                    )
+                                }
                             }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 4. Notification Troubleshooting Section
+            Surface(
+                color = if (!areNotificationsEnabled) RoseRed.copy(alpha = 0.12f) else SurfaceDark.copy(alpha = 0.5f),
+                shape = RoundedCornerShape(10.dp),
+                border = if (!areNotificationsEnabled) androidx.compose.foundation.BorderStroke(1.dp, RoseRed) else null,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Having trouble with notifications?",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (!areNotificationsEnabled) RoseRed else TextPrimary
+                        )
+                        Surface(
+                            color = if (areNotificationsEnabled) EmeraldGreen.copy(alpha = 0.2f) else RoseRed.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp)
+                        ) {
+                            Text(
+                                text = if (areNotificationsEnabled) "Notifications Allowed" else "Notifications Blocked",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (areNotificationsEnabled) EmeraldGreen else RoseRed,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    if (!areNotificationsEnabled) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "System notifications are disabled for ParkingTimeDetector. Notifications cannot appear until enabled.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("Open System Notification Settings", color = Color.White, fontSize = 12.sp)
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Some device brands (Samsung, Xiaomi, Huawei) silence heads-up banners or aggressively put apps to sleep. Send a test notification below to check if heads-up notifications show on your phone. If not, enable 'Confirmation Dialog Windows' above.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.sendTestApprovalNotification()
+                                Toast.makeText(context, "Test approval notification sent! Check your notification bar.", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp), tint = PrimaryBlue)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Send Test Approval Notification", color = PrimaryBlue, fontSize = 13.sp)
                         }
                     }
                 }
@@ -1695,107 +1678,99 @@ fun SettingsScreen(
         val enableQuickRenewAutomation by viewModel.enableQuickRenewAutomation.collectAsState()
         val pauseBeforePayment by viewModel.pauseBeforePayment.collectAsState()
 
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Automated Screen Actions (Quick-Renew)",
+            icon = Icons.Default.PlayArrow,
+            iconTint = PrimaryBlue,
+            isExpanded = expandedSections.contains("QUICK_RENEW_ASSIST"),
+            onToggle = { toggleSection("QUICK_RENEW_ASSIST") },
+            summary = if (enableQuickRenewAutomation) "Quick-Renew Assist Active" else "Assist Disabled",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Uses Accessibility Service to automate finding your zone and preparing renewal in supported parking apps.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Toggle 1: Enable Quick-Renew Automation
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Automated Screen Actions (Quick-Renew)",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "Enable Quick-Renew Assist",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
+                    Text(
+                        text = "In MyParking: types zone number & selects lot. In ParkedIn: clicks 'Extend' automatically.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Uses Accessibility Service to automate finding your zone and preparing renewal in supported parking apps.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = enableQuickRenewAutomation,
+                    onCheckedChange = { viewModel.toggleEnableQuickRenewAutomation(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = PrimaryBlue,
+                        checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
+                    )
                 )
+            }
 
+            if (enableQuickRenewAutomation) {
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Toggle 1: Enable Quick-Renew Automation
+                // Toggle 2: Pause at Final Start / Pay Button
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Pause Before Payment",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = EmeraldGreen.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "RECOMMENDED",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldGreen,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
                         Text(
-                            text = "Enable Quick-Renew Assist",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "In MyParking: types zone number & selects lot. In ParkedIn: clicks 'Extend' automatically.",
+                            text = "Pauses on the final START / Pay screen so you can verify rates, vehicle, and duration before payment.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     androidx.compose.material3.Switch(
-                        checked = enableQuickRenewAutomation,
-                        onCheckedChange = { viewModel.toggleEnableQuickRenewAutomation(it) },
+                        checked = pauseBeforePayment,
+                        onCheckedChange = { viewModel.togglePauseBeforePayment(it) },
                         colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryBlue,
-                            checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
+                            checkedThumbColor = EmeraldGreen,
+                            checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
                         )
                     )
-                }
-
-                if (enableQuickRenewAutomation) {
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Toggle 2: Pause at Final Start / Pay Button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Pause Before Payment",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = EmeraldGreen.copy(alpha = 0.2f),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "RECOMMENDED",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = EmeraldGreen,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Pauses on the final START / Pay screen so you can verify rates, vehicle, and duration before payment.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        androidx.compose.material3.Switch(
-                            checked = pauseBeforePayment,
-                            onCheckedChange = { viewModel.togglePauseBeforePayment(it) },
-                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                checkedThumbColor = EmeraldGreen,
-                                checkedTrackColor = EmeraldGreen.copy(alpha = 0.4f)
-                            )
-                        )
-                    }
                 }
             }
         }
@@ -1814,216 +1789,194 @@ fun SettingsScreen(
             }
         }
 
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Overlay Privacy & Lock Screen",
+            icon = Icons.Default.Security,
+            iconTint = PrimaryBlue,
+            isExpanded = expandedSections.contains("OVERLAY_PRIVACY"),
+            onToggle = { toggleSection("OVERLAY_PRIVACY") },
+            summary = lockScreenPolicy.title,
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Control floating dialog visibility on locked screens to protect sensitive parking location, duration, and cost details.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Diagnostic badges for system privacy
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = if (isLocked.value) AmberWarning.copy(alpha = 0.2f) else EmeraldGreen.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Keyguard", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            if (isLocked.value) "Locked" else "Unlocked",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isLocked.value) AmberWarning else EmeraldGreen
+                        )
+                    }
+                }
+                Surface(
+                    color = if (privateAllowed.value) EmeraldGreen.copy(alpha = 0.2f) else RoseRed.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("Private Content", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text(
+                            if (privateAllowed.value) "Allowed" else "Masked",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (privateAllowed.value) EmeraldGreen else RoseRed
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Lock Screen Overlay Behavior",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            com.parktimedetector.data.LockScreenOverlayPolicy.values().forEach { policy ->
+                val isSelected = lockScreenPolicy == policy
+                Surface(
+                    color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                    shape = RoundedCornerShape(12.dp),
+                    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue) else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { viewModel.setLockScreenOverlayPolicy(policy) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = isSelected,
+                            onClick = { viewModel.setLockScreenOverlayPolicy(policy) },
+                            colors = androidx.compose.material3.RadioButtonDefaults.colors(
+                                selectedColor = PrimaryBlue
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = policy.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) PrimaryBlue else TextPrimary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = policy.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Dismiss on Screen Off toggle
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Overlay Privacy & Lock Screen",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "Dismiss Overlay When Screen Turns Off",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Control floating dialog visibility on locked screens to protect sensitive parking location, duration, and cost details.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Diagnostic badges for system privacy
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        color = if (isLocked.value) AmberWarning.copy(alpha = 0.2f) else EmeraldGreen.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            Text("Keyguard", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            Text(
-                                if (isLocked.value) "Locked" else "Unlocked",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isLocked.value) AmberWarning else EmeraldGreen
-                            )
-                        }
-                    }
-                    Surface(
-                        color = if (privateAllowed.value) EmeraldGreen.copy(alpha = 0.2f) else RoseRed.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            Text("Private Content", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                            Text(
-                                if (privateAllowed.value) "Allowed" else "Masked",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (privateAllowed.value) EmeraldGreen else RoseRed
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Lock Screen Overlay Behavior",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                com.parktimedetector.data.LockScreenOverlayPolicy.values().forEach { policy ->
-                    val isSelected = lockScreenPolicy == policy
-                    Surface(
-                        color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
-                        shape = RoundedCornerShape(12.dp),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue) else null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { viewModel.setLockScreenOverlayPolicy(policy) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            androidx.compose.material3.RadioButton(
-                                selected = isSelected,
-                                onClick = { viewModel.setLockScreenOverlayPolicy(policy) },
-                                colors = androidx.compose.material3.RadioButtonDefaults.colors(
-                                    selectedColor = PrimaryBlue
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = policy.title,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) PrimaryBlue else TextPrimary
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = policy.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Dismiss on Screen Off toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Dismiss Overlay When Screen Turns Off",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = "Hides active overlay dialog immediately on display power-off; resumes upon unlock.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    androidx.compose.material3.Switch(
-                        checked = dismissOnScreenOff,
-                        onCheckedChange = { viewModel.setDismissOverlayOnScreenOff(it) },
-                        colors = androidx.compose.material3.SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryBlue,
-                            checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
-                        )
+                    Text(
+                        text = "Hides active overlay dialog immediately on display power-off; resumes upon unlock.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
                     )
                 }
+                Spacer(modifier = Modifier.width(12.dp))
+                androidx.compose.material3.Switch(
+                    checked = dismissOnScreenOff,
+                    onCheckedChange = { viewModel.setDismissOverlayOnScreenOff(it) },
+                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                        checkedThumbColor = PrimaryBlue,
+                        checkedTrackColor = PrimaryBlue.copy(alpha = 0.4f)
+                    )
+                )
             }
         }
 
         // 2. Notification Action Explanation & Supported Apps Test
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Supported Parking Apps",
+            icon = Icons.Default.OpenInNew,
+            iconTint = PrimaryBlue,
+            isExpanded = expandedSections.contains("SUPPORTED_APPS"),
+            onToggle = { toggleSection("SUPPORTED_APPS") },
+            summary = "ParkedIn, MyParking",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Supported Parking Apps",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Pressing any parking notification directly opens the corresponding app (ParkedIn or MyParking) so you can renew your session without searching for the app.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+            Text(
+                text = "Pressing any parking notification directly opens the corresponding app (ParkedIn or MyParking) so you can renew your session without searching for the app.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.openParkedInApp(context) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Button(
-                        onClick = { viewModel.openParkedInApp(context) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Launch ParkedIn", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = { viewModel.openMyParkingApp(context) },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = com.parktimedetector.ui.theme.AccentCyan),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Launch MyParking", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
+                    Text("Launch ParkedIn", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { viewModel.openMyParkingApp(context) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = com.parktimedetector.ui.theme.AccentCyan),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Launch MyParking", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
             }
         }
 
         // 3. Permissions Section
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Required Permissions",
+            icon = Icons.Default.Security,
+            iconTint = PrimaryBlue,
+            isExpanded = expandedSections.contains("PERMISSIONS"),
+            onToggle = { toggleSection("PERMISSIONS") },
+            summary = if (hasListenerPermission && hasAccessibilityPermission) "Essential Granted" else "Permissions Needed",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Required Permissions",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 // Notification Access
                 PermissionRow(
                     title = "Notification Access",
@@ -2083,37 +2036,31 @@ fun SettingsScreen(
         }
 
         // 4. Diagnostics & Troubleshooting (For all users to export logs / report issues)
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
-            modifier = Modifier.fillMaxWidth()
+        CollapsibleSettingsCard(
+            title = "Diagnostics & Troubleshooting",
+            icon = Icons.Default.Share,
+            iconTint = PrimaryBlue,
+            isExpanded = expandedSections.contains("DIAGNOSTICS"),
+            onToggle = { toggleSection("DIAGNOSTICS") },
+            summary = "Export System Logs",
+            containerColor = CardBackground
         ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryBlue)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Diagnostics & Troubleshooting",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary
-                    )
-                }
-                Text(
-                    text = "If you encounter parking detection issues or want to submit logs to support, you can export a secure diagnostic report containing recent event logs and service status.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary
-                )
-                OutlinedButton(
-                    onClick = {
-                        viewModel.shareLogsQuick(context)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Export Diagnostic Report", color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
-                }
+            Text(
+                text = "If you encounter parking detection issues or want to submit logs to support, you can export a secure diagnostic report containing recent event logs and service status.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = {
+                    viewModel.shareLogsQuick(context)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Export Diagnostic Report", color = PrimaryBlue, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -2328,6 +2275,92 @@ fun SettingsTopUpdateCard(
                     ) {
                         Text("Updates", color = PrimaryBlue, fontSize = 12.sp)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CollapsibleSettingsCard(
+    title: String,
+    icon: ImageVector,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    summary: String? = null,
+    trailingAction: (@Composable () -> Unit)? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 250),
+        label = "settingsCardChevronRotation"
+    )
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle() }
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (!summary.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (trailingAction != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    trailingAction()
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (isExpanded) "Collapse" else "Expand",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.rotate(rotation)
+                )
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
+                exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 20.dp, bottom = 20.dp)
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(bottom = 14.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    content()
                 }
             }
         }
