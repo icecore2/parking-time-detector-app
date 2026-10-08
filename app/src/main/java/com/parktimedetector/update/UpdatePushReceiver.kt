@@ -31,6 +31,11 @@ class UpdatePushReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
+        if (!AppUpdateEngine.IS_ENABLED) {
+            Log.d(TAG, "Update engine is disabled; ignoring update broadcast")
+            return
+        }
+
         val action = intent?.action ?: return
         Log.d(TAG, "Received update broadcast action: $action")
         AppLogger.info(context, TAG, "Received broadcast action: $action")

@@ -5,8 +5,17 @@ import android.content.Intent
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +59,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import com.parktimedetector.update.UpdateState
+import com.parktimedetector.update.AppUpdateEngine
 import com.parktimedetector.ui.components.ParkingCircularGauge
 import com.parktimedetector.ui.components.ParkingUrgencyState
 import com.parktimedetector.ui.components.CustomExtensionDialog
@@ -203,7 +213,7 @@ fun HomeScreen(
         }
 
         // App Update Mini Badge (Compact UI element, opens update dialog)
-        if (viewModel.isUpdateActiveAndNewer()) {
+        if (AppUpdateEngine.IS_ENABLED && viewModel.isUpdateActiveAndNewer()) {
             val updateState by viewModel.updateState.collectAsState()
             val versionLabel = when (val s = updateState) {
                 is UpdateState.Available -> "v${s.updateInfo.versionName} Available"
@@ -254,7 +264,7 @@ fun HomeScreen(
             }
         }
 
-        if (showHomeUpdateDialog) {
+        if (AppUpdateEngine.IS_ENABLED && showHomeUpdateDialog) {
             AppUpdateDialog(
                 viewModel = viewModel,
                 onDismiss = { showHomeUpdateDialog = false }

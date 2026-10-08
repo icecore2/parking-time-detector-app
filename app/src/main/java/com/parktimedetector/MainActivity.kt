@@ -63,6 +63,7 @@ import com.parktimedetector.ui.theme.SurfaceDark
 import com.parktimedetector.ui.theme.TextMuted
 import com.parktimedetector.ui.theme.TextPrimary
 import com.parktimedetector.ui.viewmodel.ParkingViewModel
+import com.parktimedetector.update.AppUpdateEngine
 
 enum class ScreenTab(val title: String) {
     HOME("Timer"),
@@ -93,8 +94,10 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Check for updates silently in the background
-        viewModel.checkForUpdates(this, silent = true)
+        // Check for updates silently in the background if update engine is enabled
+        if (AppUpdateEngine.IS_ENABLED) {
+            viewModel.checkForUpdates(this, silent = true)
+        }
 
         setContent {
             val themeMode by viewModel.themeMode.collectAsState()
@@ -114,7 +117,9 @@ class MainActivity : ComponentActivity() {
         if (com.parktimedetector.audio.AlarmSoundManager.isPlaying.value) {
             com.parktimedetector.audio.AlarmSoundManager.stop(this)
         }
-        viewModel.checkOrClearIfInstalled(this)
+        if (AppUpdateEngine.IS_ENABLED) {
+            viewModel.checkOrClearIfInstalled(this)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -56,6 +56,13 @@ object AppUpdateEngine {
     private const val TAG = "AppUpdateEngine"
     const val DEFAULT_REPO = "icecore2/parking-time-detector-app"
 
+    /**
+     * Master feature flag for the App Update Engine.
+     * When set to false, all background update checks, push receivers, downloads,
+     * installation prompts, and update UI cards/badges are completely hidden and disabled.
+     */
+    const val IS_ENABLED = false
+
     private val scope = CoroutineScope(Dispatchers.IO)
     private var downloadJob: Job? = null
     private var activeCall: Call? = null
@@ -84,6 +91,11 @@ object AppUpdateEngine {
         repo: String = DEFAULT_REPO,
         silent: Boolean = false
     ) {
+        if (!IS_ENABLED) {
+            Log.d(TAG, "Update engine is disabled; skipping checkForUpdates")
+            return
+        }
+
         if (_updateState.value is UpdateState.Checking || _updateState.value is UpdateState.Downloading) {
             Log.d(TAG, "Update check skipped: already busy with state ${_updateState.value}")
             return
@@ -177,6 +189,11 @@ object AppUpdateEngine {
      * immediately resets state to Idle and cancels update notifications.
      */
     fun checkOrClearIfInstalled(context: Context): Boolean {
+        if (!IS_ENABLED) {
+            _updateState.value = UpdateState.Idle
+            return false
+        }
+
         val current = _updateState.value
         val targetInfo = when (current) {
             is UpdateState.Available -> current.updateInfo
@@ -212,6 +229,8 @@ object AppUpdateEngine {
      * than the currently installed application version.
      */
     fun isUpdateActiveAndNewer(): Boolean {
+        if (!IS_ENABLED) return false
+
         val current = _updateState.value
         val info = when (current) {
             is UpdateState.Available -> current.updateInfo
@@ -235,6 +254,11 @@ object AppUpdateEngine {
         updateInfo: AppUpdateInfo,
         autoDownload: Boolean = false
     ) {
+        if (!IS_ENABLED) {
+            Log.d(TAG, "Update engine is disabled; ignoring processPushUpdate")
+            return
+        }
+
         AppLogger.info(
             context,
             TAG,
@@ -274,6 +298,8 @@ object AppUpdateEngine {
      * Downloads the APK file specified in [updateInfo] with progress reporting.
      */
     fun downloadUpdate(context: Context, updateInfo: AppUpdateInfo) {
+        if (!IS_ENABLED) return
+
         if (updateInfo.downloadUrl.isBlank()) {
             _updateState.value = UpdateState.Error("Missing APK download URL")
             return
@@ -434,6 +460,8 @@ object AppUpdateEngine {
      * Verifies permissions and triggers APK installation.
      */
     fun installUpdate(context: Context, apkFile: File) {
+        if (!IS_ENABLED) return
+
         if (!apkFile.exists() || apkFile.length() == 0L) {
             _updateState.value = UpdateState.Error("APK file not found on disk")
             return

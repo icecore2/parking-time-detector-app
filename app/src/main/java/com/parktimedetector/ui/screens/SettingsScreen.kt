@@ -241,7 +241,7 @@ fun SettingsScreen(
         )
     }
 
-    if (showUpdateDialog) {
+    if (AppUpdateEngine.IS_ENABLED && showUpdateDialog) {
         com.parktimedetector.ui.components.AppUpdateDialog(
             viewModel = viewModel,
             onDismiss = { showUpdateDialog = false }
@@ -263,10 +263,12 @@ fun SettingsScreen(
         )
 
         // Top App Version & Updates Card
-        SettingsTopUpdateCard(
-            viewModel = viewModel,
-            onOpenUpdateDialog = { showUpdateDialog = true }
-        )
+        if (AppUpdateEngine.IS_ENABLED) {
+            SettingsTopUpdateCard(
+                viewModel = viewModel,
+                onOpenUpdateDialog = { showUpdateDialog = true }
+            )
+        }
 
         // 0. Theme Mode Selector Card
         Card(

@@ -320,4 +320,13 @@ class UpdateEngineTest {
 
         assertTrue("Update card must show when newer version is pushed", shouldShowCard)
     }
+
+    @Test
+    fun testUpdateEngine_whenDisabled_reportsNoUpdateActive() {
+        // Master flag must be disabled
+        assertFalse("AppUpdateEngine must be disabled", AppUpdateEngine.IS_ENABLED)
+
+        // isUpdateActiveAndNewer must return false when engine is disabled
+        assertFalse(AppUpdateEngine.isUpdateActiveAndNewer())
+    }
 }
