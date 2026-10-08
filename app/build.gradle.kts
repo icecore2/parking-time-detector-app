@@ -24,12 +24,18 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_FILE")
-            if (!keystorePath.isNullOrEmpty() && file(keystorePath).exists()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+            val envKeystore = System.getenv("KEYSTORE_FILE")
+            val projectKeystore = rootProject.file("keystore/release.jks")
+            if (!envKeystore.isNullOrEmpty() && file(envKeystore).exists()) {
+                storeFile = file(envKeystore)
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "parkingtimedetector"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "release"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "parkingtimedetector"
+            } else if (projectKeystore.exists()) {
+                storeFile = projectKeystore
+                storePassword = "parkingtimedetector"
+                keyAlias = "release"
+                keyPassword = "parkingtimedetector"
             }
         }
     }
@@ -38,11 +44,15 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            val releaseConfig = signingConfigs.getByName("release")
+            if (releaseConfig.storeFile?.exists() == true) {
+                signingConfig = releaseConfig
+            }
         }
         release {
-            val keystorePath = System.getenv("KEYSTORE_FILE")
-            if (!keystorePath.isNullOrEmpty() && file(keystorePath).exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            val releaseConfig = signingConfigs.getByName("release")
+            if (releaseConfig.storeFile?.exists() == true) {
+                signingConfig = releaseConfig
             } else {
                 signingConfig = signingConfigs.getByName("debug")
             }

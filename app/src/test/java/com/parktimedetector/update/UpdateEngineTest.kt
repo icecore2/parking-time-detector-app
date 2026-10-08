@@ -172,16 +172,52 @@ class UpdateEngineTest {
             put("assets", assets)
         }
 
-        val info = AppUpdateInfo.fromGitHubReleaseJson(githubJson)
+        val info = AppUpdateInfo.fromGitHubReleaseJson(githubJson, preferDebug = false)
         assertNotNull(info)
         info!!
         assertEquals("v1.1.0", info.versionName)
         assertEquals("Release v1.1.0", info.title)
         assertTrue(info.changelog.contains("update engine"))
-        // Release APK should be preferred over debug APK
+        // Release APK should be preferred when preferDebug = false
         assertEquals("ParkingTimeDetector-v1.1.0.apk", info.fileName)
         assertEquals("https://github.com/icecore2/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0.apk", info.downloadUrl)
         assertEquals(20500000L, info.fileSizeBytes)
+    }
+
+    @Test
+    fun testAppUpdateInfo_fromGitHubReleaseJson_prefersDebugApk() {
+        val githubJson = JSONObject().apply {
+            put("tag_name", "v1.1.0")
+            put("name", "Release v1.1.0")
+            put("body", "- Enhanced timer\n- Added update engine")
+            put("published_at", "2026-10-07T08:00:00Z")
+
+            val assets = JSONArray().apply {
+                put(
+                    JSONObject().apply {
+                        put("name", "ParkingTimeDetector-v1.1.0.apk")
+                        put("size", 20500000L)
+                        put("browser_download_url", "https://github.com/icecore2/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0.apk")
+                    }
+                )
+                put(
+                    JSONObject().apply {
+                        put("name", "ParkingTimeDetector-v1.1.0-debug.apk")
+                        put("size", 21000000L)
+                        put("browser_download_url", "https://github.com/icecore2/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0-debug.apk")
+                    }
+                )
+            }
+            put("assets", assets)
+        }
+
+        val info = AppUpdateInfo.fromGitHubReleaseJson(githubJson, preferDebug = true)
+        assertNotNull(info)
+        info!!
+        assertEquals("v1.1.0", info.versionName)
+        // Debug APK should be preferred when preferDebug = true
+        assertEquals("ParkingTimeDetector-v1.1.0-debug.apk", info.fileName)
+        assertEquals("https://github.com/icecore2/releases/download/v1.1.0/ParkingTimeDetector-v1.1.0-debug.apk", info.downloadUrl)
     }
 
     @Test
@@ -322,11 +358,8 @@ class UpdateEngineTest {
     }
 
     @Test
-    fun testUpdateEngine_whenDisabled_reportsNoUpdateActive() {
-        // Master flag must be disabled
-        assertFalse("AppUpdateEngine must be disabled", AppUpdateEngine.IS_ENABLED)
-
-        // isUpdateActiveAndNewer must return false when engine is disabled
-        assertFalse(AppUpdateEngine.isUpdateActiveAndNewer())
+    fun testUpdateEngine_whenEnabledAndIdle_reportsNoUpdateActive() {
+        assertTrue("AppUpdateEngine must be enabled", AppUpdateEngine.IS_ENABLED)
+        assertFalse("No update active when idle", AppUpdateEngine.isUpdateActiveAndNewer())
     }
 }

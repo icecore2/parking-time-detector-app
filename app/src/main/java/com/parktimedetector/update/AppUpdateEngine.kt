@@ -61,7 +61,7 @@ object AppUpdateEngine {
      * When set to false, all background update checks, push receivers, downloads,
      * installation prompts, and update UI cards/badges are completely hidden and disabled.
      */
-    const val IS_ENABLED = false
+    const val IS_ENABLED = true
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private var downloadJob: Job? = null

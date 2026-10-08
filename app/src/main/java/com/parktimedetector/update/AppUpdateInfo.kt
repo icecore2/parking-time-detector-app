@@ -1,6 +1,7 @@
 package com.parktimedetector.update
 
 import android.os.Bundle
+import com.parktimedetector.BuildConfig
 import org.json.JSONObject
 
 /**
@@ -82,7 +83,10 @@ data class AppUpdateInfo(
             )
         }
 
-        fun fromGitHubReleaseJson(json: JSONObject): AppUpdateInfo? {
+        fun fromGitHubReleaseJson(
+            json: JSONObject,
+            preferDebug: Boolean = BuildConfig.DEBUG
+        ): AppUpdateInfo? {
             val tagName = json.optString("tag_name")
             if (tagName.isEmpty()) return null
 
@@ -91,17 +95,28 @@ data class AppUpdateInfo(
             val publishedAt = json.optString("published_at")
             val assets = json.optJSONArray("assets") ?: return null
 
-            // Find APK asset - prioritize release apk over debug
+            // Find APK asset matching current build variant (debug vs release)
             var selectedAsset: JSONObject? = null
             for (i in 0 until assets.length()) {
                 val asset = assets.optJSONObject(i) ?: continue
                 val assetName = asset.optString("name", "")
                 if (assetName.endsWith(".apk", ignoreCase = true)) {
-                    if (!assetName.contains("debug", ignoreCase = true)) {
+                    val isAssetDebug = assetName.contains("debug", ignoreCase = true)
+                    if (preferDebug == isAssetDebug) {
                         selectedAsset = asset
                         break
-                    } else if (selectedAsset == null) {
+                    }
+                }
+            }
+
+            // Fallback: if preferred variant asset is not found, take any APK asset
+            if (selectedAsset == null) {
+                for (i in 0 until assets.length()) {
+                    val asset = assets.optJSONObject(i) ?: continue
+                    val assetName = asset.optString("name", "")
+                    if (assetName.endsWith(".apk", ignoreCase = true)) {
                         selectedAsset = asset
+                        break
                     }
                 }
             }

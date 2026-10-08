@@ -65,6 +65,9 @@ jobs:
             echo "$KEYSTORE_BASE64" | base64 --decode > /tmp/release.keystore
             echo "keystore_file=/tmp/release.keystore" >> "$GITHUB_OUTPUT"
             echo "Release keystore decoded successfully."
+          elif [ -f "keystore/release.jks" ]; then
+            echo "keystore_file=keystore/release.jks" >> "$GITHUB_OUTPUT"
+            echo "Using tracked project keystore/release.jks for consistent release signing."
           else
             echo "No custom release keystore secret found; falling back to debug-signing."
           fi
@@ -75,9 +78,9 @@ jobs:
       - name: Build APKs (Release & Debug)
         env:
           KEYSTORE_FILE: ${{ steps.keystore.outputs.keystore_file }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'parkingtimedetector' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'release' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'parkingtimedetector' }}
         run: ./gradlew assembleRelease assembleDebug --stacktrace
 
       - name: Collect and Rename Release Artifacts
