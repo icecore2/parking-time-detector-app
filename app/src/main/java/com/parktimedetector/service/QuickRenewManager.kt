@@ -38,7 +38,7 @@ enum class RenewAppType {
 object QuickRenewManager {
 
     private const val TAG = "QUICK_RENEW"
-    private const val WATCHDOG_TIMEOUT_MS = 15000L
+    private const val WATCHDOG_TIMEOUT_MS = 30000L
 
     private val _state = MutableStateFlow(QuickRenewState.IDLE)
     val state = _state.asStateFlow()
@@ -195,6 +195,16 @@ object QuickRenewManager {
         if (isTargetMock() || target.contains("mock", ignoreCase = true)) {
             return eventPackage.contains("mock", ignoreCase = true) || eventPackage == "com.parktimedetector"
         }
+        // Match Calgary Parking Authority / MyParking variations
+        if ((target.contains("cpa", ignoreCase = true) || target.contains("myparking", ignoreCase = true)) &&
+            (eventPackage.contains("cpa", ignoreCase = true) || eventPackage.contains("myparking", ignoreCase = true))
+        ) {
+            return true
+        }
+        // Match ParkedIn variations
+        if (target.contains("parkedin", ignoreCase = true) && eventPackage.contains("parkedin", ignoreCase = true)) {
+            return true
+        }
         return false
     }
 
@@ -284,6 +294,28 @@ object QuickRenewManager {
         toastSender: (String) -> Unit,
         logSender: (String, String) -> Unit
     ): Boolean {
+        // Step 0: Check if MyParking already displays an active session with an Extend/Renew button
+        val extendRegex = Regex("""(?i)\b(?:extend(?:\s*(?:session|parking|time))?|renew(?:\s*(?:session|parking))?|add\s*time)\b""")
+        val extendNode = findNodeMatching(rootNode) { node ->
+            val text = node.text?.toString() ?: ""
+            val desc = node.contentDescription?.toString() ?: ""
+            extendRegex.containsMatchIn(text) || extendRegex.containsMatchIn(desc)
+        }
+
+        if (extendNode != null) {
+            val clickable = findClickableTarget(extendNode)
+            if (clickable != null) {
+                lastActionTime = System.currentTimeMillis()
+                logSender(TAG, "Clicked 'Extend' button in MyParking")
+                val clicked = clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clicked) {
+                    toastSender("⚡ Quick-Renew: Opened extension in MyParking")
+                    completeWithState(QuickRenewState.PAUSED_FOR_USER_CONFIRMATION, "Review extension in MyParking")
+                    return true
+                }
+            }
+        }
+
         when (_state.value) {
             QuickRenewState.ARMED_AWAITING_APP,
             QuickRenewState.MYPARKING_FINDING_SEARCH -> {
@@ -426,6 +458,10 @@ object QuickRenewManager {
         while (current != null) {
             if (current.isClickable) return current
             current = current.parent
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null && child.isClickable) return child
         }
         return node
     }

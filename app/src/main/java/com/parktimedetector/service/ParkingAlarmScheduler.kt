@@ -167,5 +167,9 @@ object ParkingAlarmScheduler {
             alarmManager.cancel(expirePI)
             expirePI.cancel()
         }
+
+        // Halt any playing alarm sound or vibration immediately
+        com.parktimedetector.audio.AlarmSoundManager.stop(context)
+        com.parktimedetector.notification.NotificationHelper.cancelCriticalWarningNotification(context)
     }
 }

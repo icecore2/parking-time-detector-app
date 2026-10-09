@@ -270,6 +270,10 @@ object DetectionApprovalManager {
                     )
                     ParkingAlarmScheduler.cancelAlarms(context, activeSession.id)
                     NotificationHelper.cancelStatusNotification(context)
+                    NotificationHelper.cancelCriticalWarningNotification(context)
+                    NotificationHelper.cancelAdvanceWarningNotification(context)
+                    NotificationHelper.cancelWalkBufferNotification(context)
+                    com.parktimedetector.audio.AlarmSoundManager.stop(context)
 
                     if (activeSession.calendarEventId != null) {
                         com.parktimedetector.calendar.CalendarSyncManager.truncateEventToStop(context, activeSession.calendarEventId, stopDetection.stopTimeMillis)
@@ -302,6 +306,10 @@ object DetectionApprovalManager {
                     val id = dao.insert(newStopped)
                     _recentlyStoppedSession.value = newStopped.copy(id = id)
                     NotificationHelper.cancelStatusNotification(context)
+                    NotificationHelper.cancelCriticalWarningNotification(context)
+                    NotificationHelper.cancelAdvanceWarningNotification(context)
+                    NotificationHelper.cancelWalkBufferNotification(context)
+                    com.parktimedetector.audio.AlarmSoundManager.stop(context)
                 }
 
                 val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())

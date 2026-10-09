@@ -739,6 +739,10 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
             )
             ParkingAlarmScheduler.cancelAlarms(getApplication(), current.id)
             NotificationHelper.cancelStatusNotification(getApplication())
+            NotificationHelper.cancelCriticalWarningNotification(getApplication())
+            NotificationHelper.cancelAdvanceWarningNotification(getApplication())
+            NotificationHelper.cancelWalkBufferNotification(getApplication())
+            com.parktimedetector.audio.AlarmSoundManager.stop(getApplication())
 
             val stopped = current.copy(
                 isActive = false,
@@ -944,15 +948,13 @@ class ParkingViewModel(application: Application) : AndroidViewModel(application)
         val isAppInstalled = pm.getLaunchIntentForPackage(resolvedPkg) != null
 
         if (isAppInstalled) {
-            if (autoEnabled) {
-                com.parktimedetector.service.QuickRenewManager.arm(
-                    context = context,
-                    packageName = resolvedPkg,
-                    zoneOrLot = session.zoneOrLot,
-                    locationAddress = session.locationAddress,
-                    appType = if (isMyParking) com.parktimedetector.service.RenewAppType.MYPARKING else com.parktimedetector.service.RenewAppType.PARKEDIN
-                )
-            }
+            com.parktimedetector.service.QuickRenewManager.arm(
+                context = context,
+                packageName = resolvedPkg,
+                zoneOrLot = session.zoneOrLot,
+                locationAddress = session.locationAddress,
+                appType = if (isMyParking) com.parktimedetector.service.RenewAppType.MYPARKING else com.parktimedetector.service.RenewAppType.PARKEDIN
+            )
             openTargetApp(context, resolvedPkg)
         } else {
             // Target app is not installed: Delegate to DebugBridge

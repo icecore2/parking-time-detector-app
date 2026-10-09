@@ -311,6 +311,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
+            .setDeleteIntent(stopAlarmPI)
             .setContentIntent(openAppPI)
             .addAction(0, "⏹ Stop Alarm", stopAlarmPI)
             .addAction(0, "⚡ +15m Extend", extendPI)
@@ -343,6 +344,7 @@ object NotificationHelper {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
+            .setDeleteIntent(stopAlarmPI)
             .setContentIntent(openAppPI)
             .addAction(0, "⏹ Stop Alarm", stopAlarmPI)
             .addAction(0, "Open $appName", openAppPI)
@@ -531,6 +533,8 @@ object NotificationHelper {
     fun cancelStatusNotification(context: Context) {
         val notificationManager = context.getSystemService(NotificationManager::class.java) ?: return
         notificationManager.cancel(NOTIFICATION_ID_STATUS)
+        cancelCriticalWarningNotification(context)
+        com.parktimedetector.audio.AlarmSoundManager.stop(context)
     }
 
     /**

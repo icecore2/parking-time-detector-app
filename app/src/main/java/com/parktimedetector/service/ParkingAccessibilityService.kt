@@ -251,17 +251,13 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
             event.className?.contains("Mock", ignoreCase = true) == true
         )
 
-        if (pkgName == packageName) {
-            DetectionApprovalManager.setAppInForeground(true)
-            if (!isMockActivityEvent) return
-        } else {
-            if (pkgName != "com.android.systemui" && !pkgName.contains("inputmethod")) {
-                DetectionApprovalManager.setAppInForeground(false)
-            }
+        if (pkgName == packageName && !isMockActivityEvent) {
+            // Ignore own app UI events without thrashing foreground state
+            return
         }
 
         // Immediately handle Quick-Renew synchronously on Main thread while rootNode is fresh
-        if (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName) && cachedQuickRenewEnabled) {
+        if (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName)) {
             val root = try { rootInActiveWindow ?: event.source } catch (_: Exception) { null }
             if (root != null) {
                 QuickRenewManager.handleAccessibilityEvent(

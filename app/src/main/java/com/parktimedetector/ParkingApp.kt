@@ -17,21 +17,31 @@ class ParkingApp : Application() {
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var runningActivities = 0
 
+            private fun isMainAppActivity(activity: Activity): Boolean {
+                return !activity.javaClass.simpleName.contains("Mock", ignoreCase = true)
+            }
+
             override fun onActivityStarted(activity: Activity) {
-                runningActivities++
-                DetectionApprovalManager.setAppInForeground(true)
+                if (isMainAppActivity(activity)) {
+                    runningActivities++
+                    DetectionApprovalManager.setAppInForeground(true)
+                }
             }
 
             override fun onActivityStopped(activity: Activity) {
-                runningActivities = (runningActivities - 1).coerceAtLeast(0)
-                if (runningActivities == 0) {
-                    DetectionApprovalManager.setAppInForeground(false)
+                if (isMainAppActivity(activity)) {
+                    runningActivities = (runningActivities - 1).coerceAtLeast(0)
+                    if (runningActivities == 0) {
+                        DetectionApprovalManager.setAppInForeground(false)
+                    }
                 }
             }
 
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
             override fun onActivityResumed(activity: Activity) {
-                DetectionApprovalManager.setAppInForeground(true)
+                if (isMainAppActivity(activity)) {
+                    DetectionApprovalManager.setAppInForeground(true)
+                }
             }
             override fun onActivityPaused(activity: Activity) {}
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}

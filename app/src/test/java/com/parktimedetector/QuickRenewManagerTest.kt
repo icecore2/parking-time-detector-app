@@ -292,4 +292,60 @@ class QuickRenewManagerTest {
         )
         assertFalse("Subsequent event within 400ms debounce must be dropped", secondResult)
     }
+
+    @Test
+    fun testMyParkingFlow_clicksExtendButtonDirectlyWhenActiveSessionPresent() {
+        QuickRenewManager.arm(
+            packageName = NotificationHelper.MYPARKING_PACKAGE,
+            zoneOrLot = "Lot 58 - 935 - 4 Av SW",
+            appType = RenewAppType.MYPARKING
+        )
+
+        val rootNode = FakeAccessibilityNode(className = "android.widget.FrameLayout")
+        val extendBtn = rootNode.addChild(
+            FakeAccessibilityNode(
+                text = "Extend Parking",
+                className = "android.widget.Button",
+                isClickable = true
+            )
+        )
+
+        val handled = QuickRenewManager.handleNode(
+            rootNode = rootNode,
+            eventPackage = NotificationHelper.MYPARKING_PACKAGE,
+            pauseBeforePayment = true
+        )
+
+        assertTrue("Should handle direct extend button in MyParking", handled)
+        assertTrue(extendBtn.actionsPerformed.contains(AccessibilityNodeInfo.ACTION_CLICK))
+        assertEquals(QuickRenewState.PAUSED_FOR_USER_CONFIRMATION, QuickRenewManager.state.value)
+    }
+
+    @Test
+    fun testMatchesTargetPackage_providerVariations() {
+        QuickRenewManager.arm(
+            packageName = "com.cpa.accountManagement",
+            zoneOrLot = "Zone 4022"
+        )
+        assertTrue(QuickRenewManager.matchesTargetPackage("com.cpa.accountManagement"))
+        assertTrue(QuickRenewManager.matchesTargetPackage("com.cpa.payment"))
+        assertTrue(QuickRenewManager.matchesTargetPackage("com.calgary.myparking.app"))
+        assertFalse(QuickRenewManager.matchesTargetPackage("com.preciseparklink.parkedin"))
+
+        QuickRenewManager.arm(
+            packageName = "com.preciseparklink.parkedin",
+            zoneOrLot = "Zone 4022"
+        )
+        assertTrue(QuickRenewManager.matchesTargetPackage("com.preciseparklink.parkedin"))
+        assertTrue(QuickRenewManager.matchesTargetPackage("com.preciseparklink.parkedin.checkout"))
+        assertFalse(QuickRenewManager.matchesTargetPackage("com.cpa.accountManagement"))
+    }
+
+    @Test
+    fun testFindClickableTarget_descendantFallback() {
+        val parent = FakeAccessibilityNode(isClickable = false)
+        val child = parent.addChild(FakeAccessibilityNode(isClickable = true))
+        val target = QuickRenewManager.findClickableTarget(parent)
+        assertEquals("Should find clickable child when parent is not clickable", child, target)
+    }
 }

@@ -117,4 +117,10 @@ class AlarmSoundProfilesTest {
         assertFalse(session.isNotifiedCritical)
         assertFalse(session.isNotifiedExpiry)
     }
+
+    @Test
+    fun testAlarmSoundManagerStopResetsPlaying() {
+        com.parktimedetector.audio.AlarmSoundManager.stop(null)
+        assertFalse(com.parktimedetector.audio.AlarmSoundManager.isPlaying.value)
+    }
 }
