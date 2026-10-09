@@ -738,5 +738,64 @@ class SessionNotificationParserTest {
         )
         assertFalse(SessionNotificationParser.isMyParkingMapScreen(stopScreenTexts, "ReceiptActivity"))
     }
+
+    @Test
+    fun testHasRemainingPhraseSingleAndSplitNodes() {
+        // Single node formats
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Active Session", "Remaining: 01 hr : 20 mins")))
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Remaining: 45 mins", "Zone 1205")))
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Remaining: 00:25:30")))
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Time Remaining: 15m")))
+
+        // Split node formats (label in one node, countdown in the next)
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Lot 58", "Remaining:", "01 hr : 20 mins")))
+        assertTrue(SessionNotificationParser.hasRemainingPhrase(listOf("Remaining", "45 mins")))
+
+        // Irrelevant phrases should return false
+        assertFalse(SessionNotificationParser.hasRemainingPhrase(listOf("Session Started", "Zone 1205", "Total: $3.00")))
+        assertFalse(SessionNotificationParser.hasRemainingPhrase(listOf("Welcome to MyParking", "Search lot")))
+    }
+
+    @Test
+    fun testExtractRemainingCountdownSplitNodes() {
+        val splitNodes = listOf("Parking Active", "Zone 4022", "Remaining:", "01 hr : 25 mins")
+        val countdown = SessionNotificationParser.extractRemainingCountdown(splitNodes)
+        assertNotNull(countdown)
+        assertEquals("01 hr : 25 mins", countdown)
+
+        val baseTime = 1700000000000L
+        val result = SessionNotificationParser.parseScreenText(splitNodes, baseTime)
+        assertNotNull(result)
+        // 1 hour and 25 mins = 85 mins = 85 * 60 * 1000 = 5_100_000 ms
+        assertEquals(baseTime + 85 * 60 * 1000L, result?.endTimeMillis)
+        assertEquals("01 hr : 25 mins", result?.remainingTimeText)
+    }
+
+    @Test
+    fun testDeactivatedDialogStopDetectionAndCostExtraction() {
+        // Test with misspelled string reported by user ("deavtivated")
+        val dialogTextsMisspelled = listOf(
+            "Session Notice",
+            "Your parking session has been deavtivated. The cost for this session was $2.50.",
+            "OK"
+        )
+        assertTrue("Should detect deactivation dialog with deavtivated spelling", SessionNotificationParser.isStopScreen(dialogTextsMisspelled))
+        val stopInfoMisspelled = SessionNotificationParser.parseStopScreenText(dialogTextsMisspelled)
+        assertNotNull(stopInfoMisspelled)
+        assertEquals("$2.50", stopInfoMisspelled?.costOrRefundText)
+        assertEquals("Your parking session has been deactivated", stopInfoMisspelled?.stopReason)
+
+        // Test with standard spelling ("deactivated")
+        val dialogTextsStandard = listOf(
+            "Alert",
+            "Your parking session has been deactivated. Total amount: $5.00 paid.",
+            "Dismiss"
+        )
+        assertTrue("Should detect deactivation dialog with standard spelling", SessionNotificationParser.isStopScreen(dialogTextsStandard))
+        val stopInfoStandard = SessionNotificationParser.parseStopScreenText(dialogTextsStandard)
+        assertNotNull(stopInfoStandard)
+        assertEquals("$5.00", stopInfoStandard?.costOrRefundText)
+        assertEquals("Your parking session has been deactivated", stopInfoStandard?.stopReason)
+    }
 }
 

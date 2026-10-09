@@ -66,14 +66,9 @@ import androidx.compose.ui.unit.sp
 import com.parktimedetector.data.ParkingSession
 import com.parktimedetector.ui.theme.AccentCyan
 import com.parktimedetector.ui.theme.AmberWarning
-import com.parktimedetector.ui.theme.CardBackground
 import com.parktimedetector.ui.theme.EmeraldGreen
 import com.parktimedetector.ui.theme.PrimaryBlue
 import com.parktimedetector.ui.theme.RoseRed
-import com.parktimedetector.ui.theme.SurfaceDark
-import com.parktimedetector.ui.theme.TextMuted
-import com.parktimedetector.ui.theme.TextPrimary
-import com.parktimedetector.ui.theme.TextSecondary
 import com.parktimedetector.ui.viewmodel.ParkingViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -505,7 +500,7 @@ fun GroupedHistoryItemCard(
     val statusColor = when {
         group.isActive -> EmeraldGreen
         group.isStopped -> RoseRed
-        group.primarySession.isExpired() -> TextMuted
+        group.primarySession.isExpired() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         else -> PrimaryBlue
     }
 
@@ -689,7 +684,7 @@ fun GroupedHistoryItemCard(
                     Text(
                         text = group.locationAddress,
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -921,7 +916,7 @@ fun GroupedHistoryItemCard(
                                     Text(
                                         text = "• #${item.id} [${item.source}] Start: $itemTime | Stop: $itemStop | Active: ${item.isActive}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = TextMuted,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.sp
                                     )
                                 }

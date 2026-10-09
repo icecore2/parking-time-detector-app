@@ -105,15 +105,10 @@ import com.parktimedetector.service.ParkingAlarmScheduler
 import com.parktimedetector.service.ParkingNotificationListenerService
 import com.parktimedetector.ui.theme.AccentCyan
 import com.parktimedetector.ui.theme.AmberWarning
-import com.parktimedetector.ui.theme.CardBackground
 import com.parktimedetector.ui.theme.DarkNavy
 import com.parktimedetector.ui.theme.EmeraldGreen
 import com.parktimedetector.ui.theme.PrimaryBlue
 import com.parktimedetector.ui.theme.RoseRed
-import com.parktimedetector.ui.theme.SurfaceDark
-import com.parktimedetector.ui.theme.TextMuted
-import com.parktimedetector.ui.theme.TextPrimary
-import com.parktimedetector.ui.theme.TextSecondary
 import com.parktimedetector.ui.viewmodel.ParkingViewModel
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat

@@ -40,6 +40,9 @@ interface ParkingDao {
     @Query("UPDATE parking_sessions SET isActive = 0, actualStopTimeMillis = :stopTime, costOrRefundText = COALESCE(:costOrRefund, costOrRefundText), stopReason = :stopReason, locationAddress = COALESCE(:locationAddress, locationAddress) WHERE id = :id")
     suspend fun endSessionWithFullDetails(id: Long, stopTime: Long, costOrRefund: String?, stopReason: String?, locationAddress: String? = null)
 
+    @Query("UPDATE parking_sessions SET endTimeMillis = :newEndTime, remainingTimeText = COALESCE(:remainingTimeText, remainingTimeText) WHERE id = :id")
+    suspend fun updateSessionEndTime(id: Long, newEndTime: Long, remainingTimeText: String? = null)
+
     @Query("UPDATE parking_sessions SET spotDetails = :spotDetails WHERE id = :id")
     suspend fun updateSpotDetails(id: Long, spotDetails: String?)
 

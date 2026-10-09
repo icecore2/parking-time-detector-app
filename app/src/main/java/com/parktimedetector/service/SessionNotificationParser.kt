@@ -52,7 +52,7 @@ object SessionNotificationParser {
 
     // Relative duration: e.g. "expires in 15 minutes", "valid for 2 hours", "13 hrs. 50 mins.", "1 hr 30 min", "duration: 2 hr"
     private val DURATION_HOURS_MINS = Pattern.compile(
-        """(?i)\b(?:duration|for|in|time|purchased)?\s*:?\s*(\d+)\s*(?:hours?|hrs?\.?|h\.?)\s*(?:and\s*)?(?:(\d+)\s*(?:minutes?|mins?\.?|m\.?))?"""
+        """(?i)\b(?:duration|for|in|time|purchased)?\s*:?\s*(\d+)\s*(?:hours?|hrs?\.?|h\.?)\s*(?:and\s*|:\s*)?(?:(\d+)\s*(?:minutes?|mins?\.?|m\.?))?"""
     )
 
     private val DURATION_ONLY_MINS = Pattern.compile(
@@ -106,8 +106,16 @@ object SessionNotificationParser {
         "parking completed", "session completed", "session summary", "parking summary",
         "stopped at", "left parking", "parking finished", "session finished",
         "session has been deactivated", "session deactivated", "parking deactivated",
-        "has been deactivated", "deactivated", "deactivation"
+        "has been deactivated", "deactivated", "deactivation",
+        "session has been deavtivated", "session deavtivated", "parking deavtivated",
+        "has been deavtivated", "deavtivated", "deavtivation",
+        "your parking session has been deactivated",
+        "your parking session has been deavtivated"
     )
+
+    val DEACTIVATED_DIALOG_REGEX = Regex("""(?i)\b(?:your\s+)?parking\s+session\s+has\s+been\s+dea[cv]t?ivat(?:ed|ion)\b""")
+
+    val REMAINING_PHRASE_REGEX = Regex("""(?i)\b(?:time\s+)?remaining\s*:?\s*(\d+.*)""")
 
     // Action button labels (these indicate buttons to click to stop, NOT that the session has ended!)
     private val STOP_ACTION_BUTTON_WORDS = listOf(
@@ -249,14 +257,47 @@ object SessionNotificationParser {
         return null
     }
 
-    fun extractRemainingCountdown(nodes: List<String>, combined: String): String? {
+    fun hasRemainingPhrase(texts: List<String>): Boolean {
+        val clean = texts.map { it.trim() }.filter { it.isNotBlank() }
+        for (i in clean.indices) {
+            val t = clean[i]
+            if (REMAINING_PHRASE_REGEX.containsMatchIn(t)) {
+                return true
+            }
+            val lower = t.lowercase()
+            if ((lower == "remaining:" || lower == "remaining" || lower == "time remaining:" || lower == "time remaining") && i + 1 < clean.size) {
+                val next = clean[i + 1]
+                if (next.any { it.isDigit() }) {
+                    return true
+                }
+            }
+        }
+        val combined = clean.joinToString(" ")
+        return REMAINING_PHRASE_REGEX.containsMatchIn(combined)
+    }
+
+    fun extractRemainingCountdown(nodes: List<String>, combined: String = nodes.joinToString(" ")): String? {
         // 1. Inspect discrete nodes directly (e.g. "Remaining: 19 mins : 57 secs")
         for (raw in nodes) {
             val node = raw.trim()
             val m = REMAINING_PREFIX_PATTERN.matcher(node)
             if (m.find()) {
                 val candidate = node.substring(m.end()).trim()
-                if (candidate.isNotBlank() && (candidate.contains("min", ignoreCase = true) || candidate.contains("sec", ignoreCase = true) || candidate.contains(":"))) {
+                if (candidate.isNotBlank() && (candidate.contains("min", ignoreCase = true) || candidate.contains("sec", ignoreCase = true) || candidate.contains(":") || candidate.contains("h", ignoreCase = true))) {
+                    return candidate
+                }
+            }
+        }
+
+        // 1b. Inspect adjacent node pairs (e.g. Node 1: "Remaining:", Node 2: "19 mins : 57 secs")
+        for (i in 0 until nodes.size - 1) {
+            val n1 = nodes[i].trim()
+            val n2 = nodes[i + 1].trim()
+            val pair = "$n1 $n2"
+            val m = REMAINING_PREFIX_PATTERN.matcher(pair)
+            if (m.find()) {
+                val candidate = pair.substring(m.end()).trim()
+                if (candidate.isNotBlank() && (candidate.contains("min", ignoreCase = true) || candidate.contains("sec", ignoreCase = true) || candidate.contains(":") || candidate.contains("h", ignoreCase = true))) {
                     return candidate
                 }
             }
@@ -306,14 +347,19 @@ object SessionNotificationParser {
 
         val combined = cleanNodes.joinToString(" ").lowercase()
 
-        // 1. Check if it has a past-tense completion indicator
+        // 1. Direct match for deactivation dialog
+        if (DEACTIVATED_DIALOG_REGEX.containsMatchIn(combined)) {
+            return true
+        }
+
+        // 2. Check if it has a past-tense completion indicator
         val matchedCompletion = STOP_COMPLETED_INDICATOR_WORDS.any { combined.contains(it) }
         if (!matchedCompletion) return false
 
-        // 2. If it explicitly states "Active Session" or "Time Remaining" without "ended" / "stopped at" / "deactivated",
+        // 3. If it explicitly states "Active Session" or "Time Remaining" without "ended" / "stopped at" / "deactivated",
         // it is an active dashboard that might merely have a "Session Summary" tab or button.
         val hasActiveIndicator = ACTIVE_SESSION_INDICATOR_WORDS.any { combined.contains(it) }
-        val hasExplicitEnded = combined.contains("ended") || combined.contains("stopped at") || combined.contains("left parking") || combined.contains("deactivated")
+        val hasExplicitEnded = combined.contains("ended") || combined.contains("stopped at") || combined.contains("left parking") || combined.contains("deactivated") || combined.contains("deavtivated")
         if (hasActiveIndicator && !hasExplicitEnded) {
             return false
         }
@@ -332,6 +378,7 @@ object SessionNotificationParser {
 
         val combined = cleanNodes.joinToString(" ")
         val combinedLower = combined.lowercase()
+        val isDeactivationDialog = DEACTIVATED_DIALOG_REGEX.containsMatchIn(combined)
 
         // Stop Time
         var stopTime = postTimeMillis
@@ -373,7 +420,7 @@ object SessionNotificationParser {
             }
         }
 
-        // Cost / Refund
+        // Cost / Refund / Paid Amount
         var costOrRefundText: String? = null
         val costMatcher = COST_OR_REFUND_PATTERN.matcher(combined)
         if (costMatcher.find()) {
@@ -386,15 +433,20 @@ object SessionNotificationParser {
         }
 
         val zone = extractZone(combined)
-        val matchedIndicator = STOP_COMPLETED_INDICATOR_WORDS.firstOrNull { combinedLower.contains(it) } ?: "Session stopped"
+        val matchedIndicator = if (isDeactivationDialog) {
+            "Your parking session has been deactivated"
+        } else {
+            STOP_COMPLETED_INDICATOR_WORDS.firstOrNull { combinedLower.contains(it) } ?: "Session stopped"
+        }
 
         return ParsedStopResult(
             stopTimeMillis = stopTime,
             durationParkedText = durationParkedText,
             costOrRefundText = costOrRefundText,
             zoneOrLot = zone,
-            detectedReason = "Stop screen detected: $matchedIndicator",
-            locationAddress = extractLocationAddress(cleanNodes)
+            detectedReason = if (isDeactivationDialog) "Deactivation dialog: Your parking session has been deactivated" else "Stop screen detected: $matchedIndicator",
+            locationAddress = extractLocationAddress(cleanNodes),
+            stopReason = if (isDeactivationDialog) "Your parking session has been deactivated" else null
         )
     }
 
@@ -424,7 +476,7 @@ object SessionNotificationParser {
         val notes = extractNotes(cleanNodes)
         val explicitStartTime = extractStartTime(combined, postTimeMillis)
 
-        // 1. Try combined text
+        // 1. Try combined text (e.g. explicit expiry time or duration)
         val parsedCombined = parse(null, combined, null, postTimeMillis)
         if (parsedCombined != null) {
             return parsedCombined.copy(

@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -35,20 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.parktimedetector.data.ParkingSession
-import com.parktimedetector.ui.theme.CardBackground
 import com.parktimedetector.ui.theme.EmeraldGreen
-import com.parktimedetector.ui.theme.PrimaryBlue
 import com.parktimedetector.ui.theme.RoseRed
-import com.parktimedetector.ui.theme.SurfaceDark
-import com.parktimedetector.ui.theme.TextMuted
-import com.parktimedetector.ui.theme.TextPrimary
-import com.parktimedetector.ui.theme.TextSecondary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -110,24 +104,24 @@ fun SessionStopScreen(
             text = "Parking Session Deactivated",
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = TextPrimary,
+            color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
 
         Text(
             text = "Timer deactivated and alerts cancelled. Here is your complete session summary.",
             style = MaterialTheme.typography.bodyMedium,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
 
         // Summary Card
         Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, PrimaryBlue.copy(alpha = 0.3f), RoundedCornerShape(24.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(16.dp))
         ) {
             Column(
                 modifier = Modifier
@@ -146,13 +140,13 @@ fun SessionStopScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(SurfaceDark),
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Default.LocalParking,
                                 contentDescription = null,
-                                tint = PrimaryBlue,
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -162,12 +156,12 @@ fun SessionStopScreen(
                                 text = session.zoneOrLot ?: "Parking Location",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = session.source,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = PrimaryBlue
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -187,12 +181,7 @@ fun SessionStopScreen(
                 }
 
                 // Divider
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(SurfaceDark)
-                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 // Location / Street Address if present
                 if (!session.locationAddress.isNullOrBlank()) {
@@ -200,10 +189,10 @@ fun SessionStopScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Address / Cross-streets", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        Text("Address / Cross-streets", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             session.locationAddress,
-                            color = TextPrimary,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.fillMaxWidth(0.65f),
                             textAlign = TextAlign.End
@@ -216,8 +205,8 @@ fun SessionStopScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Date", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text(dateStr, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    Text("Date", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    Text(dateStr, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
                 }
 
                 // Time Range
@@ -225,8 +214,8 @@ fun SessionStopScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Time Parked", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text("$startTimeStr → $stopTimeStr", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text("Time Parked", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                    Text("$startTimeStr → $stopTimeStr", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
 
                 // Total Duration
@@ -234,22 +223,22 @@ fun SessionStopScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Total Duration", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("Total Duration", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                     val purchased = session.purchasedDurationText?.let { " (purchased $it)" } ?: ""
                     Text("$durationFormatted$purchased", color = EmeraldGreen, fontWeight = FontWeight.Bold)
                 }
 
-                // Cost / Refund if available
+                // Cost / Paid Amount
                 val costToShow = session.costOrRefundText ?: session.initialCostText
                 if (!costToShow.isNullOrBlank()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Amount / Cost", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                        Text("Paid Amount", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
                         Text(
                             costToShow,
-                            color = PrimaryBlue,
+                            color = EmeraldGreen,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
@@ -261,8 +250,8 @@ fun SessionStopScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Deactivation Note", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                        Text(session.stopReason, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                        Text("Deactivation Note", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        Text(session.stopReason, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -276,12 +265,15 @@ fun SessionStopScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            ),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Done / Back to Home", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Done / Back to Home", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
 
         OutlinedButton(
@@ -291,9 +283,9 @@ fun SessionStopScreen(
                 .height(50.dp),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Icon(Icons.Default.History, contentDescription = null, tint = TextPrimary)
+            Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("View All History", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Text("View All History", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
         }
 
         Spacer(modifier = Modifier.height(16.dp))

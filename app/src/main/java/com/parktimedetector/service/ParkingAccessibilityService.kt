@@ -124,8 +124,54 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
     private var userConfirmedStartInDialog = false
     private var userInitiatedStopAttempt = false
     private var lastForegroundActivity: String? = null
+    private var isOverlaySuppressedForApp = false
+    private var savedBubbleModeBeforeSuppression = true
+    private var savedOverlayX: Int? = null
+    private var savedOverlayY: Int? = null
 
     override fun isBubbleCollapsed(): Boolean = isBubbleMode && overlayView != null
+
+    override fun onAppForegroundStateChanged(inForeground: Boolean) {
+        mainHandler.post {
+            if (inForeground) {
+                if (overlayView != null) {
+                    isOverlaySuppressedForApp = true
+                    savedBubbleModeBeforeSuppression = isBubbleMode
+                    savedOverlayX = currentOverlayParams?.x
+                    savedOverlayY = currentOverlayParams?.y
+                    hideOverlayInternal()
+                    AppLogger.info(
+                        context = applicationContext,
+                        tag = "BUBBLE_HIDDEN_FOR_APP",
+                        message = "[FLOW: BUBBLE] Parking Time Detector opened. Temporarily hiding floating bubble."
+                    )
+                }
+            } else {
+                if (isOverlaySuppressedForApp) {
+                    isOverlaySuppressedForApp = false
+                    val pendingStart = DetectionApprovalManager.pendingDetection.value
+                    val pendingStop = DetectionApprovalManager.pendingStopDetection.value
+                    if (pendingStart != null) {
+                        isBubbleMode = savedBubbleModeBeforeSuppression
+                        showOverlay(pendingStart)
+                        AppLogger.info(
+                            context = applicationContext,
+                            tag = "BUBBLE_RESTORED_OUTSIDE_APP",
+                            message = "[FLOW: BUBBLE] User navigated outside app. Restoring floating bubble."
+                        )
+                    } else if (pendingStop != null) {
+                        isBubbleMode = savedBubbleModeBeforeSuppression
+                        showStopOverlay(pendingStop)
+                        AppLogger.info(
+                            context = applicationContext,
+                            tag = "BUBBLE_RESTORED_OUTSIDE_APP",
+                            message = "[FLOW: BUBBLE] User navigated outside app. Restoring stop bubble."
+                        )
+                    }
+                }
+            }
+        }
+    }
 
 
     private fun dpToPx(dp: Int): Int {
@@ -200,14 +246,19 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val pkgName = event.packageName?.toString() ?: return
-
         val isMockActivityEvent = (pkgName == packageName) && (
             (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName)) ||
             event.className?.contains("Mock", ignoreCase = true) == true
         )
 
-        // Ignore our own app unless testing a mock activity or QuickRenew is armed for mock
-        if (pkgName == packageName && !isMockActivityEvent) return
+        if (pkgName == packageName) {
+            DetectionApprovalManager.setAppInForeground(true)
+            if (!isMockActivityEvent) return
+        } else {
+            if (pkgName != "com.android.systemui" && !pkgName.contains("inputmethod")) {
+                DetectionApprovalManager.setAppInForeground(false)
+            }
+        }
 
         // Immediately handle Quick-Renew synchronously on Main thread while rootNode is fresh
         if (QuickRenewManager.isArmed() && QuickRenewManager.matchesTargetPackage(pkgName) && cachedQuickRenewEnabled) {
@@ -347,8 +398,46 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                                 rawData = dialogTexts.joinToString("\n")
                             )
 
-                            // Check if this dialog looks like a parking start confirmation dialog
+                            // Check if this dialog is a parking session deactivation/stop dialog
                             val combined = dialogTexts.joinToString(" ").lowercase()
+                            if (SessionNotificationParser.isStopScreen(dialogTexts) || SessionNotificationParser.DEACTIVATED_DIALOG_REGEX.containsMatchIn(combined)) {
+                                val stopResult = SessionNotificationParser.parseStopScreenText(dialogTexts, now)
+                                if (stopResult != null) {
+                                    AppLogger.success(
+                                        context = applicationContext,
+                                        tag = "DIALOG_STOP_DETECTED",
+                                        message = "SUCCESS: Deactivation dialog detected in $appName! Cost/Paid: ${stopResult.costOrRefundText ?: "$0.00"}",
+                                        packageName = pkgName,
+                                        rawData = dialogTexts.joinToString("\n")
+                                    )
+                                    val activeDbSession = try {
+                                        com.parktimedetector.data.ParkingDatabase.getDatabase(applicationContext).parkingDao().getActiveSession()
+                                    } catch (_: Exception) { null }
+
+                                    val zone = stopResult.zoneOrLot ?: activeDbSession?.zoneOrLot
+                                    val location = stopResult.locationAddress ?: activeDbSession?.locationAddress
+                                    val cost = stopResult.costOrRefundText ?: activeDbSession?.costOrRefundText
+
+                                    val pendingStop = com.parktimedetector.data.PendingParkingStopDetection(
+                                        packageName = pkgName,
+                                        appName = appName,
+                                        zoneOrLot = zone,
+                                        stopTimeMillis = stopResult.stopTimeMillis,
+                                        durationParkedText = stopResult.durationParkedText,
+                                        costOrRefundText = cost,
+                                        source = "$appName App (Deactivation Dialog)",
+                                        reason = stopResult.detectedReason,
+                                        rawData = dialogTexts.joinToString("\n"),
+                                        locationAddress = location,
+                                        stopReason = stopResult.stopReason ?: "Your parking session has been deactivated"
+                                    )
+                                    DetectionApprovalManager.recordDirectDeactivation(applicationContext, pendingStop)
+                                    scheduleProactiveScans(pkgName)
+                                    return@launch
+                                }
+                            }
+
+                            // Check if this dialog looks like a parking start confirmation dialog
                             if (combined.contains("confirm") || combined.contains("start") ||
                                 combined.contains("pay") || combined.contains("purchase") ||
                                 combined.contains("rate") || combined.contains("zone") ||
@@ -510,7 +599,14 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                     locationAddress = location,
                     stopReason = stopResult.stopReason ?: "Detected on-screen stop in $appName"
                 )
-                DetectionApprovalManager.requestStopApproval(applicationContext, pendingStop)
+                val isDeactivation = (stopResult.stopReason?.contains("deactivated", ignoreCase = true) == true) ||
+                    SessionNotificationParser.DEACTIVATED_DIALOG_REGEX.containsMatchIn(fullDump)
+
+                if (isDeactivation) {
+                    DetectionApprovalManager.recordDirectDeactivation(applicationContext, pendingStop)
+                } else {
+                    DetectionApprovalManager.requestStopApproval(applicationContext, pendingStop)
+                }
                 return
             }
         } else if (SessionNotificationParser.containsStopActionButton(texts)) {
@@ -536,6 +632,72 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                     rawData = fullDump
                 )
                 return
+            }
+
+            val hasRemaining = SessionNotificationParser.hasRemainingPhrase(texts) || !parsedResult.remainingTimeText.isNullOrBlank()
+
+            // When phrase "Remaining: <TIME>" appears, sync the active session or auto-start immediately!
+            if (hasRemaining) {
+                val activeDbSession = try {
+                    com.parktimedetector.data.ParkingDatabase.getDatabase(applicationContext).parkingDao().getActiveSession()
+                } catch (_: Exception) { null }
+
+                if (activeDbSession != null) {
+                    val timeDiff = Math.abs(parsedResult.endTimeMillis - activeDbSession.endTimeMillis)
+                    if (timeDiff > 5000L) {
+                        val timeFormat = SimpleDateFormat("h:mm:ss a", Locale.getDefault())
+                        val formattedEnd = timeFormat.format(Date(parsedResult.endTimeMillis))
+                        val dao = com.parktimedetector.data.ParkingDatabase.getDatabase(applicationContext).parkingDao()
+                        dao.updateSessionEndTime(activeDbSession.id, parsedResult.endTimeMillis, parsedResult.remainingTimeText)
+                        val updatedSession = activeDbSession.copy(
+                            endTimeMillis = parsedResult.endTimeMillis,
+                            remainingTimeText = parsedResult.remainingTimeText ?: activeDbSession.remainingTimeText
+                        )
+                        ParkingAlarmScheduler.scheduleAlarms(applicationContext, updatedSession)
+                        NotificationHelper.showActiveCountdownNotification(applicationContext, updatedSession)
+                        com.parktimedetector.widget.ParkingWidgetManager.updateAll(applicationContext)
+
+                        AppLogger.success(
+                            context = applicationContext,
+                            tag = "SESSION_SYNCED",
+                            message = "Synchronized active session end time to $formattedEnd from on-screen remaining countdown (${parsedResult.remainingTimeText ?: ""})",
+                            packageName = pkgName,
+                            rawData = fullDump
+                        )
+                        lastDetectedEndTime = parsedResult.endTimeMillis
+                    }
+                    return
+                } else {
+                    val timeFormat = SimpleDateFormat("h:mm:ss a", Locale.getDefault())
+                    val formattedEnd = timeFormat.format(Date(parsedResult.endTimeMillis))
+                    AppLogger.success(
+                        context = applicationContext,
+                        tag = "SCREEN_AUTO_STARTED",
+                        message = "Auto-started parking session for $appName! Countdown: ${parsedResult.remainingTimeText ?: ""} (Valid until $formattedEnd)",
+                        packageName = pkgName,
+                        rawData = fullDump
+                    )
+                    val pending = PendingParkingDetection(
+                        packageName = pkgName,
+                        appName = appName,
+                        zoneOrLot = parsedResult.zoneOrLot,
+                        endTimeMillis = parsedResult.endTimeMillis,
+                        source = "$appName App (Screen Countdown Auto-Start)",
+                        reason = parsedResult.detectedReason,
+                        rawData = fullDump,
+                        locationAddress = parsedResult.locationAddress,
+                        purchasedDurationText = parsedResult.purchasedDurationText,
+                        initialCostText = parsedResult.costText,
+                        remainingTimeText = parsedResult.remainingTimeText,
+                        notesText = parsedResult.notesText,
+                        startTimeMillis = parsedResult.startTimeMillis ?: now
+                    )
+                    DetectionApprovalManager.autoStartSession(applicationContext, pending)
+                    FloatingZonesOverlayService.hide()
+                    hideOverlayInternal()
+                    lastDetectedEndTime = parsedResult.endTimeMillis
+                    return
+                }
             }
 
             // Check if start session requires confirmation dialog interaction (e.g. MyParking app)
@@ -860,6 +1022,14 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 val policy = prefsRepo.lockScreenOverlayPolicy.first()
                 val dialogPosition = prefsRepo.overlayDialogPosition.first()
                 val overlayPresentationMode = prefsRepo.overlayPresentationMode.first()
+
+                if (DetectionApprovalManager.isAppInForeground.value) {
+                    isOverlaySuppressedForApp = true
+                    savedBubbleModeBeforeSuppression = (overlayPresentationMode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+                    Log.d(TAG, "Floating overlay suppressed because Parking Time Detector is in foreground")
+                    return@launch
+                }
+
                 if (!OverlayPrivacyManager.canShowOverlay(applicationContext, policy)) {
                     Log.i(TAG, "Floating overlay suppressed on lock screen per policy ($policy)")
                     return@launch
@@ -1082,6 +1252,14 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
                 val policy = prefsRepo.lockScreenOverlayPolicy.first()
                 val dialogPosition = prefsRepo.overlayDialogPosition.first()
                 val overlayPresentationMode = prefsRepo.overlayPresentationMode.first()
+
+                if (DetectionApprovalManager.isAppInForeground.value) {
+                    isOverlaySuppressedForApp = true
+                    savedBubbleModeBeforeSuppression = (overlayPresentationMode == com.parktimedetector.data.OverlayPresentationMode.BUBBLE)
+                    Log.d(TAG, "Floating stop overlay suppressed because Parking Time Detector is in foreground")
+                    return@launch
+                }
+
                 if (!OverlayPrivacyManager.canShowOverlay(applicationContext, policy)) {
                     Log.i(TAG, "Floating stop overlay suppressed on lock screen per policy ($policy)")
                     return@launch
@@ -1303,9 +1481,11 @@ class ParkingAccessibilityService : AccessibilityService(), DetectionApprovalMan
         } catch (e: Exception) {
             Log.e(TAG, "Error removing accessibility overlay view", e)
         } finally {
-            isBubbleMode = false
-            isStopOverlay = false
-            currentOverlayParams = null
+            if (!isOverlaySuppressedForApp) {
+                isBubbleMode = false
+                isStopOverlay = false
+                currentOverlayParams = null
+            }
         }
     }
 

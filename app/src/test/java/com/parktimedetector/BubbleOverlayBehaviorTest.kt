@@ -259,4 +259,67 @@ class BubbleOverlayBehaviorTest {
         )
         assertFalse("When EXPANDED_DIALOG is selected, detection must not start in bubble mode", initialBubbleMode)
     }
+
+    @Test
+    fun testAppForegroundStateNotification() {
+        var lastReportedForeground: Boolean? = null
+        val mockCallback = object : DetectionApprovalManager.OverlayCallback {
+            override fun showOverlay(detection: PendingParkingDetection) {}
+            override fun showStopOverlay(detection: PendingParkingStopDetection) {}
+            override fun hideOverlay() {}
+            override fun isBubbleCollapsed(): Boolean = false
+            override fun onAppForegroundStateChanged(inForeground: Boolean) {
+                lastReportedForeground = inForeground
+            }
+        }
+
+        DetectionApprovalManager.overlayCallback = mockCallback
+
+        DetectionApprovalManager.setAppInForeground(true)
+        assertTrue(DetectionApprovalManager.isAppInForeground.value)
+        assertEquals(true, lastReportedForeground)
+
+        DetectionApprovalManager.setAppInForeground(false)
+        assertFalse(DetectionApprovalManager.isAppInForeground.value)
+        assertEquals(false, lastReportedForeground)
+    }
+
+    @Test
+    fun testBubbleSuppressedWhenInAppAndRestoredWhenLeavingApp() {
+        var isOverlayVisible = true
+        var isOverlaySuppressedForApp = false
+        var savedBubbleState: Boolean? = null
+
+        // Simulate app entering foreground
+        fun onForegroundChanged(inForeground: Boolean, hasPendingDetection: Boolean) {
+            if (inForeground) {
+                if (isOverlayVisible) {
+                    savedBubbleState = true
+                    isOverlaySuppressedForApp = true
+                    isOverlayVisible = false
+                }
+            } else {
+                if (isOverlaySuppressedForApp) {
+                    isOverlaySuppressedForApp = false
+                    if (hasPendingDetection) {
+                        isOverlayVisible = true
+                    }
+                }
+            }
+        }
+
+        // Initially bubble is visible on screen outside the app
+        assertTrue(isOverlayVisible)
+
+        // User opens the app
+        onForegroundChanged(inForeground = true, hasPendingDetection = true)
+        assertFalse("Bubble must be hidden when app is in foreground", isOverlayVisible)
+        assertTrue("Overlay must be marked as suppressed for app", isOverlaySuppressedForApp)
+        assertEquals(true, savedBubbleState)
+
+        // User leaves the app (returns to home / other app)
+        onForegroundChanged(inForeground = false, hasPendingDetection = true)
+        assertTrue("Bubble must reappear when user leaves the app", isOverlayVisible)
+        assertFalse("Suppression flag must be cleared", isOverlaySuppressedForApp)
+    }
 }

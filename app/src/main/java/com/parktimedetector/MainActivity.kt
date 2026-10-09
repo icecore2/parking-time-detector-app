@@ -114,12 +114,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.parktimedetector.service.DetectionApprovalManager.setAppInForeground(true)
         if (com.parktimedetector.audio.AlarmSoundManager.isPlaying.value) {
             com.parktimedetector.audio.AlarmSoundManager.stop(this)
         }
         if (AppUpdateEngine.IS_ENABLED) {
             viewModel.checkOrClearIfInstalled(this)
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        com.parktimedetector.service.DetectionApprovalManager.setAppInForeground(false)
     }
 
     override fun onNewIntent(intent: Intent) {

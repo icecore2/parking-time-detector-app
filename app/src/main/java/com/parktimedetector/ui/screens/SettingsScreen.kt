@@ -106,14 +106,9 @@ import com.parktimedetector.service.ParkingAlarmScheduler
 import com.parktimedetector.service.ParkingNotificationListenerService
 import com.parktimedetector.ui.theme.AccentCyan
 import com.parktimedetector.ui.theme.AmberWarning
-import com.parktimedetector.ui.theme.CardBackground
 import com.parktimedetector.ui.theme.EmeraldGreen
 import com.parktimedetector.ui.theme.PrimaryBlue
 import com.parktimedetector.ui.theme.RoseRed
-import com.parktimedetector.ui.theme.SurfaceDark
-import com.parktimedetector.ui.theme.TextMuted
-import com.parktimedetector.ui.theme.TextPrimary
-import com.parktimedetector.ui.theme.TextSecondary
 import com.parktimedetector.ui.viewmodel.ParkingViewModel
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -556,7 +551,7 @@ fun SettingsScreen(
                             Icon(Icons.Default.Warning, contentDescription = null, tint = RoseRed)
                             Text(
                                 "Calendar permission required to create events.",
-                                color = TextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 13.sp,
                                 modifier = Modifier.weight(1f)
                             )
@@ -656,7 +651,7 @@ fun SettingsScreen(
                             Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldGreen)
                             Text(
                                 "Active sessions will automatically block your calendar schedule and adjust if extended.",
-                                color = TextPrimary,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontSize = 12.sp
                             )
                         }
@@ -753,12 +748,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("ALARM_SOUNDS"),
             onToggle = { toggleSection("ALARM_SOUNDS") },
             summary = if (!soundAlerts) "Muted" else (SoundProfileType.values().find { it.name == alarmSoundType }?.displayName ?: "Alarm"),
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Configure custom sound profiles, volume ramping, and persistent vibration patterns when entering the critical expiry zone.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -774,12 +769,12 @@ fun SettingsScreen(
                             text = "Audible Alarm Alerts",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Play alarm audio on critical expiry and when session ends.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -801,14 +796,14 @@ fun SettingsScreen(
                         text = "Alarm Sound Profile",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     SoundProfileType.values().forEach { profile ->
                         val isSelected = alarmSoundType == profile.name
                         Surface(
-                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(12.dp),
                             border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue) else null,
                             modifier = Modifier
@@ -832,7 +827,7 @@ fun SettingsScreen(
                                         text = profile.displayName,
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isSelected) PrimaryBlue else TextPrimary
+                                        color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
                                         text = if (profile == SoundProfileType.CUSTOM_TONE && !customAlarmTitle.isNullOrBlank()) {
@@ -841,7 +836,7 @@ fun SettingsScreen(
                                             profile.description
                                         },
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -890,7 +885,7 @@ fun SettingsScreen(
                                     text = "Volume Escalation",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
@@ -909,7 +904,7 @@ fun SettingsScreen(
                             Text(
                                 text = "Starts quietly (~15% volume) and ramps smoothly to 100% so you are never startled.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
@@ -928,7 +923,7 @@ fun SettingsScreen(
                         Text(
                             text = "Ramp Duration:",
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
@@ -938,7 +933,7 @@ fun SettingsScreen(
                             listOf(10, 20, 30).forEach { seconds ->
                                 val isSelected = escalationDurationSeconds == seconds
                                 Surface(
-                                    color = if (isSelected) EmeraldGreen else SurfaceDark,
+                                    color = if (isSelected) EmeraldGreen else MaterialTheme.colorScheme.surface,
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier
                                         .weight(1f)
@@ -949,7 +944,7 @@ fun SettingsScreen(
                                         text = "${seconds}s${if (seconds == 20) " (Default)" else ""}",
                                         modifier = Modifier.padding(vertical = 8.dp),
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                        color = if (isSelected) Color.Black else TextPrimary,
+                                        color = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurface,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         style = MaterialTheme.typography.labelMedium
                                     )
@@ -968,7 +963,7 @@ fun SettingsScreen(
                             text = "Critical Expiry Zone",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -987,7 +982,7 @@ fun SettingsScreen(
                     Text(
                         text = "When remaining time drops below this threshold, the circular progress gauge turns Pulsing Red, and escalating alarm audio and persistent vibrations trigger.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
@@ -998,7 +993,7 @@ fun SettingsScreen(
                         listOf(1, 2, 3, 5).forEach { mins ->
                             val isSelected = criticalWarningMinutes == mins
                             Surface(
-                                color = if (isSelected) RoseRed else SurfaceDark,
+                                color = if (isSelected) RoseRed else MaterialTheme.colorScheme.surface,
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier
                                     .weight(1f)
@@ -1009,7 +1004,7 @@ fun SettingsScreen(
                                     text = "$mins m${if (mins == 2) " (Default)" else ""}",
                                     modifier = Modifier.padding(vertical = 8.dp),
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    color = if (isSelected) Color.White else TextPrimary,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -1031,12 +1026,12 @@ fun SettingsScreen(
                             text = "Persistent Vibration Pattern",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "Vibrates persistently in critical zone until dismissed, snoozed, or extended.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -1058,7 +1053,7 @@ fun SettingsScreen(
                     VibrationPatternType.values().forEach { pattern ->
                         val isSelected = vibrationPatternType == pattern.name
                         Surface(
-                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                            color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
                             shape = RoundedCornerShape(10.dp),
                             border = if (isSelected) androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue) else null,
                             modifier = Modifier
@@ -1087,12 +1082,12 @@ fun SettingsScreen(
                                             text = pattern.displayName,
                                             style = MaterialTheme.typography.bodySmall,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) PrimaryBlue else TextPrimary
+                                            color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurface
                                         )
                                         Text(
                                             text = pattern.description,
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = TextSecondary
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -1172,12 +1167,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("VISUAL_FEEDBACK"),
             onToggle = { toggleSection("VISUAL_FEEDBACK") },
             summary = if (hapticFeedbackEnabled) "Tactile Haptics Enabled" else "Haptics Disabled",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Controls animations and tactile touch sensations across the app.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1193,12 +1188,12 @@ fun SettingsScreen(
                         text = "Tactile Haptic Feedback",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Delivers a crisp physical click sensation when tapping timer quick-extend buttons (+15m, +30m, +1h).",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1216,7 +1211,7 @@ fun SettingsScreen(
 
             // Dynamic Gauge Explanation Surface
             Surface(
-                color = SurfaceDark,
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1239,14 +1234,14 @@ fun SettingsScreen(
                             text = "Dynamic Circular Progress Transitions",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "The timer gauge automatically transitions: Green (Safe) → Amber (Advance Warning) → Pulsing Red (Critical Zone ≤ ${criticalWarningMinutes}m & Expired), accompanied by an ambient breathing glow.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1273,12 +1268,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("DETECTION_APPROVAL"),
             onToggle = { toggleSection("DETECTION_APPROVAL") },
             summary = "${if (alwaysDetect) "Continuous" else "On-Demand"} • ${if (requireApproval) "Manual Confirm" else "Auto-Start"}",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Controls how detected parking sessions and stops are confirmed before timers and history are updated.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1295,7 +1290,7 @@ fun SettingsScreen(
                             text = "Always Detect",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -1318,7 +1313,7 @@ fun SettingsScreen(
                             "Automatic background detection paused. Tap 'Start Detection' on the main screen or launch a supported app to activate a 5-minute detection window."
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1345,12 +1340,12 @@ fun SettingsScreen(
                         text = "Require User Confirmation",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Ask for your confirmation instead of automatically starting a timer when parking is detected.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1368,7 +1363,7 @@ fun SettingsScreen(
 
             // 2. Built-in Notifications info badge (Default / Recommended)
             Surface(
-                color = SurfaceDark,
+                color = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -1391,14 +1386,14 @@ fun SettingsScreen(
                             text = "Built-in System Notifications",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "Detections send native heads-up notifications with action buttons ('Start Timer', 'Accept Stop', 'Dismiss'). Tap the notification action to confirm without interrupting your current screen.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -1417,7 +1412,7 @@ fun SettingsScreen(
                             text = "Confirmation Dialog Window",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -1435,7 +1430,7 @@ fun SettingsScreen(
                     Text(
                         text = "Show a floating confirmation dialog directly over parking apps. When enabled, notifications stay quiet in the shade to prevent on-screen popup clutter.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1464,7 +1459,7 @@ fun SettingsScreen(
                             text = "Auto-Show Cheapest Rates on Map",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
@@ -1482,7 +1477,7 @@ fun SettingsScreen(
                     Text(
                         text = "Automatically project the floating cheapest zones overlay whenever looking at the map in Calgary MyParking.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1499,7 +1494,7 @@ fun SettingsScreen(
             if (showConfirmationDialogs) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Surface(
-                    color = SurfaceDark.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -1508,13 +1503,13 @@ fun SettingsScreen(
                             text = "Initial Detection Presentation",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Choose how new parking and stop detections are presented on screen.",
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         com.parktimedetector.data.OverlayPresentationMode.values().forEach { mode ->
@@ -1538,12 +1533,12 @@ fun SettingsScreen(
                                         text = mode.title,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = if (overlayPresentationMode == mode) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (overlayPresentationMode == mode) TextPrimary else TextSecondary
+                                        color = if (overlayPresentationMode == mode) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = mode.description,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -1555,7 +1550,7 @@ fun SettingsScreen(
                             text = "Dialog Placement (When Expanded)",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         com.parktimedetector.data.OverlayDialogPosition.values().forEach { pos ->
@@ -1579,12 +1574,12 @@ fun SettingsScreen(
                                         text = pos.title,
                                         style = MaterialTheme.typography.bodySmall,
                                         fontWeight = if (overlayDialogPosition == pos) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (overlayDialogPosition == pos) TextPrimary else TextSecondary
+                                        color = if (overlayDialogPosition == pos) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(
                                         text = pos.description,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -1597,7 +1592,7 @@ fun SettingsScreen(
 
             // 4. Notification Troubleshooting Section
             Surface(
-                color = if (!areNotificationsEnabled) RoseRed.copy(alpha = 0.12f) else SurfaceDark.copy(alpha = 0.5f),
+                color = if (!areNotificationsEnabled) RoseRed.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(10.dp),
                 border = if (!areNotificationsEnabled) androidx.compose.foundation.BorderStroke(1.dp, RoseRed) else null,
                 modifier = Modifier.fillMaxWidth()
@@ -1612,7 +1607,7 @@ fun SettingsScreen(
                             text = "Having trouble with notifications?",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (!areNotificationsEnabled) RoseRed else TextPrimary
+                            color = if (!areNotificationsEnabled) RoseRed else MaterialTheme.colorScheme.onSurface
                         )
                         Surface(
                             color = if (areNotificationsEnabled) EmeraldGreen.copy(alpha = 0.2f) else RoseRed.copy(alpha = 0.2f),
@@ -1633,7 +1628,7 @@ fun SettingsScreen(
                         Text(
                             text = "System notifications are disabled for ParkingTimeDetector. Notifications cannot appear until enabled.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Button(
@@ -1654,7 +1649,7 @@ fun SettingsScreen(
                         Text(
                             text = "Some device brands (Samsung, Xiaomi, Huawei) silence heads-up banners or aggressively put apps to sleep. Send a test notification below to check if heads-up notifications show on your phone. If not, enable 'Confirmation Dialog Windows' above.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         OutlinedButton(
@@ -1685,12 +1680,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("QUICK_RENEW_ASSIST"),
             onToggle = { toggleSection("QUICK_RENEW_ASSIST") },
             summary = if (enableQuickRenewAutomation) "Quick-Renew Assist Active" else "Assist Disabled",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Uses Accessibility Service to automate finding your zone and preparing renewal in supported parking apps.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1706,12 +1701,12 @@ fun SettingsScreen(
                         text = "Enable Quick-Renew Assist",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "In MyParking: types zone number & selects lot. In ParkedIn: clicks 'Extend' automatically.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1740,7 +1735,7 @@ fun SettingsScreen(
                                 text = "Pause Before Payment",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = TextPrimary
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Surface(
@@ -1759,7 +1754,7 @@ fun SettingsScreen(
                         Text(
                             text = "Pauses on the final START / Pay screen so you can verify rates, vehicle, and duration before payment.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -1796,12 +1791,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("OVERLAY_PRIVACY"),
             onToggle = { toggleSection("OVERLAY_PRIVACY") },
             summary = lockScreenPolicy.title,
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Control floating dialog visibility on locked screens to protect sensitive parking location, duration, and cost details.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1817,7 +1812,7 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Text("Keyguard", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text("Keyguard", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
                             if (isLocked.value) "Locked" else "Unlocked",
                             style = MaterialTheme.typography.bodySmall,
@@ -1832,7 +1827,7 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        Text("Private Content", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text("Private Content", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(
                             if (privateAllowed.value) "Allowed" else "Masked",
                             style = MaterialTheme.typography.bodySmall,
@@ -1847,7 +1842,7 @@ fun SettingsScreen(
             Text(
                 text = "Lock Screen Overlay Behavior",
                 style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -1855,7 +1850,7 @@ fun SettingsScreen(
             com.parktimedetector.data.LockScreenOverlayPolicy.values().forEach { policy ->
                 val isSelected = lockScreenPolicy == policy
                 Surface(
-                    color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else SurfaceDark,
+                    color = if (isSelected) PrimaryBlue.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
                     shape = RoundedCornerShape(12.dp),
                     border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue) else null,
                     modifier = Modifier
@@ -1881,13 +1876,13 @@ fun SettingsScreen(
                                 text = policy.title,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isSelected) PrimaryBlue else TextPrimary
+                                color = if (isSelected) PrimaryBlue else MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = policy.description,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -1907,12 +1902,12 @@ fun SettingsScreen(
                         text = "Dismiss Overlay When Screen Turns Off",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Hides active overlay dialog immediately on display power-off; resumes upon unlock.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Spacer(modifier = Modifier.width(12.dp))
@@ -1935,12 +1930,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("SUPPORTED_APPS"),
             onToggle = { toggleSection("SUPPORTED_APPS") },
             summary = "ParkedIn, MyParking",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "Pressing any parking notification directly opens the corresponding app (ParkedIn or MyParking) so you can renew your session without searching for the app.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(14.dp))
             Row(
@@ -1974,7 +1969,7 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("PERMISSIONS"),
             onToggle = { toggleSection("PERMISSIONS") },
             summary = if (hasListenerPermission && hasAccessibilityPermission) "Essential Granted" else "Permissions Needed",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 // Notification Access
@@ -2043,12 +2038,12 @@ fun SettingsScreen(
             isExpanded = expandedSections.contains("DIAGNOSTICS"),
             onToggle = { toggleSection("DIAGNOSTICS") },
             summary = "Export System Logs",
-            containerColor = CardBackground
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 text = "If you encounter parking detection issues or want to submit logs to support, you can export a secure diagnostic report containing recent event logs and service status.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
@@ -2084,7 +2079,7 @@ fun PermissionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceDark)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -2101,7 +2096,7 @@ fun PermissionRow(
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -2109,7 +2104,7 @@ fun PermissionRow(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -2149,7 +2144,7 @@ fun SettingsTopUpdateCard(
 
     Card(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -2184,7 +2179,7 @@ fun SettingsTopUpdateCard(
                             text = "App Version",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -2224,14 +2219,14 @@ fun SettingsTopUpdateCard(
                             Text(
                                 text = "Checking for updates...",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         else -> {
                             Text(
                                 text = "Build ${BuildConfig.VERSION_CODE} • Up to date",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

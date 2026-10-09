@@ -36,16 +36,44 @@ object DetectionApprovalManager {
         _recentlyStoppedSession.value = null
     }
 
+    private val _isAppInForeground = MutableStateFlow(false)
+    val isAppInForeground = _isAppInForeground.asStateFlow()
+
+    fun setAppInForeground(inForeground: Boolean) {
+        if (_isAppInForeground.value != inForeground) {
+            _isAppInForeground.value = inForeground
+            overlayCallback?.onAppForegroundStateChanged(inForeground)
+        }
+    }
+
     interface OverlayCallback {
         fun showOverlay(detection: PendingParkingDetection)
         fun showStopOverlay(detection: com.parktimedetector.data.PendingParkingStopDetection)
         fun hideOverlay()
         fun isBubbleCollapsed(): Boolean = false
+        fun onAppForegroundStateChanged(inForeground: Boolean) {}
     }
 
     var overlayCallback: OverlayCallback? = null
 
     fun isBubbleCollapsed(): Boolean = overlayCallback?.isBubbleCollapsed() == true
+
+    fun autoStartSession(context: Context, detection: PendingParkingDetection) {
+        scope.launch {
+            _pendingDetection.value = null
+            overlayCallback?.hideOverlay()
+            NotificationHelper.cancelDetectionApprovalNotification(context)
+            startApprovedSession(context, detection)
+        }
+    }
+
+    fun recordDirectDeactivation(
+        context: Context,
+        stopDetection: com.parktimedetector.data.PendingParkingStopDetection
+    ) {
+        _pendingStopDetection.value = stopDetection
+        approveCurrentStopDetection(context)
+    }
 
 
     fun requestApprovalOrStart(context: Context, detection: PendingParkingDetection) {
